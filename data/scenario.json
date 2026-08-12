@@ -1,0 +1,26 @@
+{
+  "objetivo_victoria": "ANIQUILACION",
+  "turno_limite": 50,
+  "jugadores": [
+    {"id_jugador": 1, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 20.0, "tipo_control": "HUMANO", "puesto_clasificacion": 1},
+    {"id_jugador": 2, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 20.0, "tipo_control": "IA", "puesto_clasificacion": 2},
+    {"id_jugador": 3, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 20.0, "tipo_control": "IA", "puesto_clasificacion": 3}
+  ],
+  "provincias": [
+    {"id_provincia": 1, "id_propietario": 1, "poblacion_base": 5000, "nivel_felicidad": 80, "nivel_infraestructura": 1, "tropas_guarnicion": 150, "nodos_vecinos": [2, 3], "fortificada": false, "tiene_rey": true},
+    {"id_provincia": 2, "id_propietario": 1, "poblacion_base": 3000, "nivel_felicidad": 75, "nivel_infraestructura": 1, "tropas_guarnicion": 80, "nodos_vecinos": [1, 4], "fortificada": false, "tiene_rey": false},
+    {"id_provincia": 3, "id_propietario": 1, "poblacion_base": 3000, "nivel_felicidad": 75, "nivel_infraestructura": 1, "tropas_guarnicion": 80, "nodos_vecinos": [1, 5], "fortificada": false, "tiene_rey": false},
+    {"id_provincia": 4, "id_propietario": 0, "poblacion_base": 2000, "nivel_felicidad": 60, "nivel_infraestructura": 0, "tropas_guarnicion": 20, "nodos_vecinos": [2, 6], "fortificada": false, "tiene_rey": false},
+    {"id_provincia": 5, "id_propietario": 2, "poblacion_base": 5000, "nivel_felicidad": 80, "nivel_infraestructura": 1, "tropas_guarnicion": 150, "nodos_vecinos": [3, 6, 7], "fortificada": false, "tiene_rey": true},
+    {"id_provincia": 6, "id_propietario": 2, "poblacion_base": 3000, "nivel_felicidad": 75, "nivel_infraestructura": 1, "tropas_guarnicion": 80, "nodos_vecinos": [4, 5, 8], "fortificada": false, "tiene_rey": false},
+    {"id_provincia": 7, "id_propietario": 2, "poblacion_base": 3000, "nivel_felicidad": 75, "nivel_infraestructura": 1, "tropas_guarnicion": 80, "nodos_vecinos": [5, 9], "fortificada": false, "tiene_rey": false},
+    {"id_provincia": 8, "id_propietario": 0, "poblacion_base": 2000, "nivel_felicidad": 60, "nivel_infraestructura": 0, "tropas_guarnicion": 20, "nodos_vecinos": [6, 9], "fortificada": false, "tiene_rey": false},
+    {"id_provincia": 9, "id_propietario": 3, "poblacion_base": 5000, "nivel_felicidad": 80, "nivel_infraestructura": 1, "tropas_guarnicion": 150, "nodos_vecinos": [7, 8, 10], "fortificada": false, "tiene_rey": true},
+    {"id_provincia": 10, "id_propietario": 3, "poblacion_base": 3000, "nivel_felicidad": 75, "nivel_infraestructura": 1, "tropas_guarnicion": 80, "nodos_vecinos": [9], "fortificada": false, "tiene_rey": false}
+  ],
+  "ejercitos": [
+    {"id_ejercito": 1, "id_propietario": 1, "cantidad_fuerza": 60, "nodo_posicion_id": 1, "contiene_rey": false},
+    {"id_ejercito": 2, "id_propietario": 2, "cantidad_fuerza": 60, "nodo_posicion_id": 5, "contiene_rey": false},
+    {"id_ejercito": 3, "id_propietario": 3, "cantidad_fuerza": 60, "nodo_posicion_id": 9, "contiene_rey": false}
+  ]
+}
