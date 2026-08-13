@@ -107,3 +107,21 @@ def aplicar_gasto_administracion(jugador, provincias_jugador, gasto, params):
     for p in provincias_jugador:
         p.nivel_felicidad = max(0.0, p.nivel_felicidad - params.p_banca)
         p.tropas_guarnicion = int(p.tropas_guarnicion * params.r_banca)
+
+
+def actualizar_poblacion(provincia, params):
+    if provincia.poblacion_base <= 0:
+        provincia.poblacion_base = 0.0
+        return
+    f_i = provincia.nivel_felicidad / 100.0
+    tasa = params.r_base * f_i * (1 + params.gamma * provincia.nivel_infraestructura)
+    provincia.poblacion_base *= (1 + tasa)
+
+
+def actualizar_felicidad(provincia, en_guerra, nivel_impuesto, params):
+    delta = 0.0
+    if en_guerra:
+        delta -= params.p_guerra
+    if nivel_impuesto > params.tau_max:
+        delta -= params.p_tau
+    provincia.nivel_felicidad = min(100.0, max(0.0, provincia.nivel_felicidad + delta))
