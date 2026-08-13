@@ -87,3 +87,23 @@ def aplicar_mantenimiento(jugador, provincias_jugador, params):
         p.tropas_guarnicion -= reduccion
         tropas_a_desertar -= reduccion
     return costo
+
+
+def calcular_gasto_administracion(provincias_jugador, total_provincias, total_poblacion, ingreso_total, params):
+    x_p = len(provincias_jugador) / total_provincias if total_provincias else 0.0
+    poblacion_jugador = sum(p.poblacion_base for p in provincias_jugador)
+    x_b = poblacion_jugador / total_poblacion if total_poblacion else 0.0
+    x = max((x_p + x_b) / 2, 1e-6)
+    factor = x ** 0.5  # correccion de signo respecto a "1 - 1/sqrt(x)", ver nota Task 6 del plan
+    gasto = factor * ingreso_total
+    return min(gasto, params.cap_adm * ingreso_total)
+
+
+def aplicar_gasto_administracion(jugador, provincias_jugador, gasto, params):
+    if jugador.oro_tesoro >= gasto:
+        jugador.oro_tesoro -= gasto
+        return
+    jugador.oro_tesoro = 0.0
+    for p in provincias_jugador:
+        p.nivel_felicidad = max(0.0, p.nivel_felicidad - params.p_banca)
+        p.tropas_guarnicion = int(p.tropas_guarnicion * params.r_banca)

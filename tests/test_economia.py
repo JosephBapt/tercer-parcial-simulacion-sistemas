@@ -77,3 +77,48 @@ def test_aplicar_mantenimiento_oro_exacto_no_deserta():
     aplicar_mantenimiento(jugador, provincias, PARAMS)
     assert jugador.oro_tesoro == 0.0
     assert provincias[0].tropas_guarnicion == 200
+
+
+from aoc_sim.engine import calcular_gasto_administracion, aplicar_gasto_administracion
+
+PARAMS_ADM = SimpleNamespace(cap_adm=0.69, p_banca=15, r_banca=0.85)
+
+
+def test_gasto_administracion_x_maximo_topa_en_cap_adm():
+    provincias = [_provincia(1, 1000, 80, 1, 0)]
+    # x_p=1, x_b=1 -> x=1 -> factor=sqrt(1)=1 -> gasto=min(1*1000, 0.69*1000)=690
+    gasto = calcular_gasto_administracion(provincias, total_provincias=1, total_poblacion=1000,
+                                           ingreso_total=1000.0, params=PARAMS_ADM)
+    assert gasto == 690.0
+
+
+def test_gasto_administracion_x_pequeno_da_gasto_bajo():
+    provincias = [_provincia(1, 100, 80, 1, 0)]
+    # x_p=1/100=0.01, x_b=100/100000=0.001 -> x=0.0055 -> factor=sqrt(0.0055)=~0.0742
+    gasto = calcular_gasto_administracion(provincias, total_provincias=100, total_poblacion=100000,
+                                           ingreso_total=1000.0, params=PARAMS_ADM)
+    assert 70.0 < gasto < 80.0
+
+
+def test_gasto_administracion_guarda_epsilon_sin_division_por_cero():
+    provincias = []
+    gasto = calcular_gasto_administracion(provincias, total_provincias=1, total_poblacion=1000,
+                                           ingreso_total=1000.0, params=PARAMS_ADM)
+    assert gasto >= 0.0
+
+
+def test_aplicar_gasto_administracion_solvente():
+    jugador = _jugador(oro=1000.0)
+    provincias = [_provincia(1, 1000, 80, 1, 100)]
+    aplicar_gasto_administracion(jugador, provincias, gasto=300.0, params=PARAMS_ADM)
+    assert jugador.oro_tesoro == 700.0
+    assert provincias[0].nivel_felicidad == 80  # sin penalizacion
+
+
+def test_aplicar_gasto_administracion_bancarrota_fallback_global():
+    jugador = _jugador(oro=50.0)
+    provincias = [_provincia(1, 1000, 80, 1, 100)]
+    aplicar_gasto_administracion(jugador, provincias, gasto=300.0, params=PARAMS_ADM)
+    assert jugador.oro_tesoro == 0.0
+    assert provincias[0].nivel_felicidad == 65  # 80-15
+    assert provincias[0].tropas_guarnicion == 85  # int(100*0.85)
