@@ -125,3 +125,18 @@ def actualizar_felicidad(provincia, en_guerra, nivel_impuesto, params):
     if nivel_impuesto > params.tau_max:
         delta -= params.p_tau
     provincia.nivel_felicidad = min(100.0, max(0.0, provincia.nivel_felicidad + delta))
+
+
+def evaluar_riesgo_revuelta(provincia, params, rng):
+    if provincia.tiene_rey:
+        return False
+    soldados_minimos = math.ceil(provincia.poblacion_base * params.ratio_min)
+    if provincia.tropas_guarnicion >= soldados_minimos:
+        return False
+    if provincia.nivel_felicidad >= params.f_revuelta:
+        return False
+    riesgo = (params.f_revuelta - provincia.nivel_felicidad) / params.f_revuelta
+    if rng.random() < riesgo:
+        provincia.id_propietario = SIN_DUENO
+        return True
+    return False
