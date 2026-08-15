@@ -2,6 +2,7 @@
 
 import math
 
+from .events import EventQueue, TipoEvento
 from .models import SIN_DUENO
 
 
@@ -235,3 +236,140 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
 
     elif tipo == "PASAR":
         pass
+
+
+def _h_inicio_turno(partida, params, evento, rng, log, contexto):
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    jugador.puntos_accion = params.puntos_accion_max
+    log(f"t={evento.tiempo:.3f} EV_INICIO_TURNO J{jugador.id_jugador}")
+    return [(evento.tiempo + 0.001, TipoEvento.PROCESAR_DEMOGRAFIA, evento.entidades, {})]
+
+
+def _h_procesar_demografia(partida, params, evento, rng, log, contexto):
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    provincias_jugador = [partida.provincias[i] for i in jugador.provincias_controladas]
+    for p in provincias_jugador:
+        actualizar_poblacion(p, params)
+    en_guerra = any(v == "GUERRA" for v in jugador.relaciones_diplomaticas.values())
+    for p in provincias_jugador:
+        actualizar_felicidad(p, en_guerra, jugador.nivel_impuesto, params)
+    log(f"t={evento.tiempo:.3f} EV_PROCESAR_DEMOGRAFIA J{jugador.id_jugador}")
+    return [(evento.tiempo + 0.001, TipoEvento.RECAUDAR_IMPUESTOS, evento.entidades, {})]
+
+
+def _h_recaudar_impuestos(partida, params, evento, rng, log, contexto):
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    provincias_jugador = [partida.provincias[i] for i in jugador.provincias_controladas]
+    ingreso = sum(calcular_ingreso_impuesto(p, jugador.nivel_impuesto) for p in provincias_jugador)
+    jugador.oro_tesoro += ingreso
+    contexto["ingreso_impuesto"][jugador.id_jugador] = ingreso
+    log(f"t={evento.tiempo:.3f} EV_RECAUDAR_IMPUESTOS J{jugador.id_jugador} +{ingreso:.2f}")
+    return [(evento.tiempo + 0.001, TipoEvento.RECAUDAR_IMPUESTO_ANUAL, evento.entidades, {})]
+
+
+def _h_recaudar_impuesto_anual(partida, params, evento, rng, log, contexto):
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    provincias_jugador = [partida.provincias[i] for i in jugador.provincias_controladas]
+    ingreso = calcular_ingreso_anual(provincias_jugador, partida.turno_actual, params)
+    if ingreso:
+        jugador.oro_tesoro += ingreso
+        log(f"t={evento.tiempo:.3f} EV_RECAUDAR_IMPUESTO_ANUAL J{jugador.id_jugador} +{ingreso:.2f}")
+    return [(evento.tiempo + 0.001, TipoEvento.LIQUIDAR_MANTENIMIENTO, evento.entidades, {})]
+
+
+def _h_liquidar_mantenimiento(partida, params, evento, rng, log, contexto):
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    provincias_jugador = [partida.provincias[i] for i in jugador.provincias_controladas]
+    costo = aplicar_mantenimiento(jugador, provincias_jugador, params)
+    log(f"t={evento.tiempo:.3f} EV_LIQUIDAR_MANTENIMIENTO J{jugador.id_jugador} -{costo:.2f}")
+    return [(evento.tiempo + 0.001, TipoEvento.FASE_ORDENES, evento.entidades, {})]
+
+
+def _h_fase_ordenes(partida, params, evento, rng, log, contexto):
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    if not jugador.provincias_controladas:
+        jugador.felicidad_nacional -= 2
+        log(f"t={evento.tiempo:.3f} J{jugador.id_jugador} sin territorio, felicidad_nacional-2")
+        if jugador.felicidad_nacional <= 0:
+            evaluar_muerte_de_rey(partida, jugador.id_jugador, log)
+            return []
+    else:
+        ordenes = contexto["obtener_ordenes"](jugador, partida, params, rng)
+        for orden in ordenes:
+            aplicar_orden(partida, params, jugador, orden, rng, log)
+            if partida.finalizada:
+                return []
+    return [(evento.tiempo + 0.001, TipoEvento.GASTO_ADMINISTRACION, evento.entidades, {})]
+
+
+def _h_gasto_administracion(partida, params, evento, rng, log, contexto):
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    for id_prov in list(jugador.provincias_controladas):
+        p = partida.provincias[id_prov]
+        if evaluar_riesgo_revuelta(p, params, rng):
+            log(f"t={evento.tiempo:.3f} REVUELTA P{p.id_provincia} se pierde")
+            jugador.provincias_controladas.remove(id_prov)
+
+    provincias_jugador = [partida.provincias[i] for i in jugador.provincias_controladas]
+    total_provincias = len(partida.provincias)
+    total_poblacion = sum(p.poblacion_base for p in partida.provincias.values())
+    ingreso_total = contexto["ingreso_impuesto"].get(jugador.id_jugador, 0.0)
+    gasto = calcular_gasto_administracion(provincias_jugador, total_provincias, total_poblacion, ingreso_total, params)
+    aplicar_gasto_administracion(jugador, provincias_jugador, gasto, params)
+    log(f"t={evento.tiempo:.3f} EV_GASTO_ADMINISTRACION J{jugador.id_jugador} -{gasto:.2f}")
+    return [(evento.tiempo + 0.001, TipoEvento.EVALUAR_VICTORIA, evento.entidades, {})]
+
+
+def _h_evaluar_victoria(partida, params, evento, rng, log, contexto):
+    partida.evaluar_condicion_victoria()
+    return [(evento.tiempo + 0.001, TipoEvento.FIN_TURNO, evento.entidades, {})]
+
+
+def _h_fin_turno(partida, params, evento, rng, log, contexto):
+    log(f"t={evento.tiempo:.3f} EV_FIN_TURNO J{evento.entidades['id_jugador']}")
+    contexto["turnos_completados"] += 1
+    return []
+
+
+_DESPACHO = {
+    TipoEvento.INICIO_TURNO: _h_inicio_turno,
+    TipoEvento.PROCESAR_DEMOGRAFIA: _h_procesar_demografia,
+    TipoEvento.RECAUDAR_IMPUESTOS: _h_recaudar_impuestos,
+    TipoEvento.RECAUDAR_IMPUESTO_ANUAL: _h_recaudar_impuesto_anual,
+    TipoEvento.LIQUIDAR_MANTENIMIENTO: _h_liquidar_mantenimiento,
+    TipoEvento.FASE_ORDENES: _h_fase_ordenes,
+    TipoEvento.GASTO_ADMINISTRACION: _h_gasto_administracion,
+    TipoEvento.EVALUAR_VICTORIA: _h_evaluar_victoria,
+    TipoEvento.FIN_TURNO: _h_fin_turno,
+}
+
+
+def ejecutar_partida(partida, params, rng, obtener_ordenes, log, turnos_minimos=5, continuar_callback=None):
+    cola = EventQueue()
+    contexto = {"obtener_ordenes": obtener_ordenes, "ingreso_impuesto": {}, "turnos_completados": 0}
+    orden_jugadores = list(partida.jugadores_activos)
+    idx = 0
+    cola.push(0.0, TipoEvento.INICIO_TURNO, {"id_jugador": orden_jugadores[idx]}, {})
+
+    while cola and not partida.finalizada:
+        evento = cola.pop()
+        handler = _DESPACHO[evento.tipo]
+        nuevos = handler(partida, params, evento, rng, log, contexto)
+        for (t, tipo, ent, payload) in nuevos:
+            cola.push(t, tipo, ent, payload)
+
+        if evento.tipo == TipoEvento.FIN_TURNO and not partida.finalizada:
+            orden_jugadores = [j for j in orden_jugadores if j in partida.jugadores_activos]
+            if not orden_jugadores:
+                break
+            if idx >= len(orden_jugadores):
+                idx = 0
+                partida.turno_actual += 1
+                if contexto["turnos_completados"] >= turnos_minimos * len(orden_jugadores):
+                    if continuar_callback is None or not continuar_callback(partida):
+                        break
+            siguiente_id = orden_jugadores[idx]
+            idx += 1
+            cola.push(evento.tiempo + 1.0, TipoEvento.INICIO_TURNO, {"id_jugador": siguiente_id}, {})
+
+    return partida
