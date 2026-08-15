@@ -31,6 +31,14 @@ def test_menu_pasar_inmediato_da_lista_vacia():
     assert ordenes == []
 
 
+def test_menu_entrada_no_numerica_no_crashea_y_descarta_orden():
+    partida, j1 = _partida_un_jugador()
+    entradas = iter(["2", "no-es-un-numero", "9"])
+    ordenes = menu_ordenes_humano(j1, partida, PARAMS, rng=None,
+                                   entrada=lambda _prompt="": next(entradas), salida=lambda m: None)
+    assert ordenes == []
+
+
 def test_obtener_ordenes_mixto_despacha_a_ia():
     p1 = Provincia(id_provincia=1, id_propietario=1, poblacion_base=1000, nivel_felicidad=80,
                     nivel_infraestructura=1, tropas_guarnicion=100, nodos_vecinos=[])

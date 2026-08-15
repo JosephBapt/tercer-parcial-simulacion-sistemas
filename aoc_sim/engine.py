@@ -161,8 +161,8 @@ def _aplicar_movimiento(partida, params, jugador, orden, log):
     destino = partida.provincias[destino_id]
     if destino.id_propietario == jugador.id_jugador:
         destino.tropas_guarnicion += ejercito.cantidad_fuerza
-        ejercito.nodo_posicion_id = destino_id
         log(f"J{jugador.id_jugador} refuerza P{destino_id} con {ejercito.cantidad_fuerza} tropas")
+        del partida.ejercitos[ejercito.id_ejercito]
         return
 
     resultado = resolver_combate(ejercito, destino, params)
@@ -175,13 +175,16 @@ def _aplicar_movimiento(partida, params, jugador, orden, log):
         if anterior_id in partida.jugadores and destino_id in partida.jugadores[anterior_id].provincias_controladas:
             partida.jugadores[anterior_id].provincias_controladas.remove(destino_id)
         jugador.provincias_controladas.append(destino_id)
-        ejercito.nodo_posicion_id = destino_id
         if resultado["rey_derrotado_de"] is not None:
             evaluar_muerte_de_rey(partida, resultado["rey_derrotado_de"], log)
     else:
-        del partida.ejercitos[ejercito.id_ejercito]
         if resultado["rey_derrotado_de"] is not None:
             evaluar_muerte_de_rey(partida, resultado["rey_derrotado_de"], log)
+
+    # El ejercito se disuelve al llegar (gana -> se convierte en la guarnicion ya
+    # actualizada por resolver_combate; pierde -> queda destruido). Nunca sigue
+    # existiendo como unidad movil separada tras resolver un MOVER.
+    del partida.ejercitos[ejercito.id_ejercito]
 
 
 def aplicar_orden(partida, params, jugador, orden, rng, log):
@@ -194,7 +197,8 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
     elif tipo == "RECLUTAR":
         provincia = partida.provincias[orden["id_provincia"]]
         costo = orden["cantidad"] * params.costo_reclutamiento_por_tropa
-        if provincia.id_propietario == jugador.id_jugador and jugador.oro_tesoro >= costo:
+        if (orden["cantidad"] > 0 and provincia.id_propietario == jugador.id_jugador
+                and jugador.oro_tesoro >= costo):
             jugador.oro_tesoro -= costo
             provincia.tropas_guarnicion += orden["cantidad"]
             log(f"J{jugador.id_jugador} recluta {orden['cantidad']} tropas en P{provincia.id_provincia}")
@@ -215,14 +219,16 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
 
     elif tipo == "ABANDONAR":
         provincia = partida.provincias[orden["id_provincia"]]
-        if provincia.id_propietario == jugador.id_jugador:
+        if provincia.id_propietario == jugador.id_jugador and provincia.tiene_rey:
+            log(f"J{jugador.id_jugador} no puede abandonar P{provincia.id_provincia}: contiene al rey")
+        elif provincia.id_propietario == jugador.id_jugador:
             provincia.id_propietario = SIN_DUENO
             jugador.provincias_controladas.remove(provincia.id_provincia)
             log(f"J{jugador.id_jugador} abandona P{provincia.id_provincia}")
 
     elif tipo == "DESMANTELAR":
         provincia = partida.provincias[orden["id_provincia"]]
-        if provincia.id_propietario == jugador.id_jugador:
+        if orden["cantidad"] > 0 and provincia.id_propietario == jugador.id_jugador:
             provincia.tropas_guarnicion = max(0, provincia.tropas_guarnicion - orden["cantidad"])
             log(f"J{jugador.id_jugador} desmantela {orden['cantidad']} tropas en P{provincia.id_provincia}")
 
@@ -292,7 +298,7 @@ def _h_fase_ordenes(partida, params, evento, rng, log, contexto):
         log(f"t={evento.tiempo:.3f} J{jugador.id_jugador} sin territorio, felicidad_nacional-2")
         if jugador.felicidad_nacional <= 0:
             evaluar_muerte_de_rey(partida, jugador.id_jugador, log)
-            return []
+            return [(evento.tiempo + 0.001, TipoEvento.FIN_TURNO, evento.entidades, {})]
     else:
         ordenes = contexto["obtener_ordenes"](jugador, partida, params, rng)
         for orden in ordenes:
@@ -348,8 +354,7 @@ def ejecutar_partida(partida, params, rng, obtener_ordenes, log, turnos_minimos=
     cola = EventQueue()
     contexto = {"obtener_ordenes": obtener_ordenes, "ingreso_impuesto": {}, "turnos_completados": 0}
     orden_jugadores = list(partida.jugadores_activos)
-    idx = 0
-    cola.push(0.0, TipoEvento.INICIO_TURNO, {"id_jugador": orden_jugadores[idx]}, {})
+    cola.push(0.0, TipoEvento.INICIO_TURNO, {"id_jugador": orden_jugadores[0]}, {})
 
     while cola and not partida.finalizada:
         evento = cola.pop()
@@ -359,16 +364,21 @@ def ejecutar_partida(partida, params, rng, obtener_ordenes, log, turnos_minimos=
             cola.push(t, tipo, ent, payload)
 
         if evento.tipo == TipoEvento.FIN_TURNO and not partida.finalizada:
+            id_actual = evento.entidades["id_jugador"]
             orden_jugadores = [j for j in orden_jugadores if j in partida.jugadores_activos]
             if not orden_jugadores:
                 break
-            idx = (idx + 1) % len(orden_jugadores)
-            if idx == 0:
+            if id_actual in orden_jugadores:
+                siguiente_idx = (orden_jugadores.index(id_actual) + 1) % len(orden_jugadores)
+            else:
+                # id_actual fue eliminado durante su propio turno: reinicia desde el primero.
+                siguiente_idx = 0
+            if siguiente_idx == 0:
                 partida.turno_actual += 1
                 if contexto["turnos_completados"] >= turnos_minimos * len(orden_jugadores):
                     if continuar_callback is None or not continuar_callback(partida):
                         break
-            siguiente_id = orden_jugadores[idx]
+            siguiente_id = orden_jugadores[siguiente_idx]
             cola.push(evento.tiempo + 1.0, TipoEvento.INICIO_TURNO, {"id_jugador": siguiente_id}, {})
 
     return partida

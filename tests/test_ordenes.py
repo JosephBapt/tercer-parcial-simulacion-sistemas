@@ -40,6 +40,20 @@ def test_orden_reclutar_descuenta_oro_y_suma_tropas():
     assert partida.provincias[1].tropas_guarnicion == 120
 
 
+def test_orden_reclutar_cantidad_negativa_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    oro_antes = j1.oro_tesoro
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "RECLUTAR", "id_provincia": 1, "cantidad": -100}, None, log=lambda m: None)
+    assert j1.oro_tesoro == oro_antes
+    assert partida.provincias[1].tropas_guarnicion == 100
+
+
+def test_orden_desmantelar_cantidad_negativa_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "DESMANTELAR", "id_provincia": 1, "cantidad": -30}, None, log=lambda m: None)
+    assert partida.provincias[1].tropas_guarnicion == 100
+
+
 def test_orden_reclutar_sin_oro_suficiente_no_hace_nada():
     partida, j1 = _partida_dos_jugadores()
     j1.oro_tesoro = 5.0
@@ -61,6 +75,7 @@ def test_orden_mover_a_provincia_propia_refuerza():
     j1.provincias_controladas.append(2)
     aplicar_orden(partida, PARAMS, j1, {"tipo": "MOVER", "id_ejercito": 1, "provincia_destino": 2}, None, log=lambda m: None)
     assert partida.provincias[2].tropas_guarnicion == 80  # 20+60
+    assert 1 not in partida.ejercitos  # se absorbe en la guarnicion, no queda duplicado
 
 
 def test_orden_mover_a_provincia_enemiga_resuelve_combate_y_transfiere():
@@ -69,6 +84,7 @@ def test_orden_mover_a_provincia_enemiga_resuelve_combate_y_transfiere():
     assert partida.provincias[2].id_propietario == 1
     assert 2 in j1.provincias_controladas
     assert 2 not in partida.jugadores[2].provincias_controladas
+    assert 1 not in partida.ejercitos  # se absorbe como guarnicion, no queda como unidad movil
 
 
 def test_orden_mover_a_no_vecino_no_hace_nada():
@@ -96,9 +112,17 @@ def test_orden_mover_venciendo_rey_defensor_elimina_jugador():
 
 def test_orden_abandonar():
     partida, j1 = _partida_dos_jugadores()
+    partida.provincias[1].tiene_rey = False
     aplicar_orden(partida, PARAMS, j1, {"tipo": "ABANDONAR", "id_provincia": 1}, None, log=lambda m: None)
     assert partida.provincias[1].id_propietario == SIN_DUENO
     assert 1 not in j1.provincias_controladas
+
+
+def test_orden_abandonar_provincia_con_rey_es_rechazada():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "ABANDONAR", "id_provincia": 1}, None, log=lambda m: None)
+    assert partida.provincias[1].id_propietario == 1
+    assert 1 in j1.provincias_controladas
 
 
 def test_orden_desmantelar():
