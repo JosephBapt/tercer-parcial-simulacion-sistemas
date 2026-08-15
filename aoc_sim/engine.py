@@ -140,3 +140,98 @@ def evaluar_riesgo_revuelta(provincia, params, rng):
         provincia.id_propietario = SIN_DUENO
         return True
     return False
+
+
+def evaluar_muerte_de_rey(partida, id_jugador, log):
+    partida.eliminar_jugador(id_jugador)
+    log(f"J{id_jugador} pierde: su rey ha muerto")
+
+
+def _aplicar_movimiento(partida, params, jugador, orden, log):
+    ejercito = partida.ejercitos.get(orden["id_ejercito"])
+    if ejercito is None or ejercito.id_propietario != jugador.id_jugador:
+        return
+    origen = partida.provincias[ejercito.nodo_posicion_id]
+    destino_id = orden["provincia_destino"]
+    if destino_id not in origen.nodos_vecinos:
+        log(f"Movimiento invalido: P{destino_id} no es vecino de P{origen.id_provincia}")
+        return
+
+    destino = partida.provincias[destino_id]
+    if destino.id_propietario == jugador.id_jugador:
+        destino.tropas_guarnicion += ejercito.cantidad_fuerza
+        ejercito.nodo_posicion_id = destino_id
+        log(f"J{jugador.id_jugador} refuerza P{destino_id} con {ejercito.cantidad_fuerza} tropas")
+        return
+
+    resultado = resolver_combate(ejercito, destino, params)
+    log(f"EV_RESOLVER_ATAQUE E{ejercito.id_ejercito} vs P{destino_id}: "
+        f"Fa={resultado['fuerza_ataque']:.1f} Fd={resultado['fuerza_defensa']:.1f} "
+        f"gana={'atacante' if resultado['gano_atacante'] else 'defensor'}")
+
+    if resultado["gano_atacante"]:
+        anterior_id = resultado["id_propietario_anterior"]
+        if anterior_id in partida.jugadores and destino_id in partida.jugadores[anterior_id].provincias_controladas:
+            partida.jugadores[anterior_id].provincias_controladas.remove(destino_id)
+        jugador.provincias_controladas.append(destino_id)
+        ejercito.nodo_posicion_id = destino_id
+        if resultado["rey_derrotado_de"] is not None:
+            evaluar_muerte_de_rey(partida, resultado["rey_derrotado_de"], log)
+    else:
+        del partida.ejercitos[ejercito.id_ejercito]
+        if resultado["rey_derrotado_de"] is not None:
+            evaluar_muerte_de_rey(partida, resultado["rey_derrotado_de"], log)
+
+
+def aplicar_orden(partida, params, jugador, orden, rng, log):
+    tipo = orden["tipo"]
+
+    if tipo == "IMPUESTO":
+        jugador.nivel_impuesto = max(0.0, orden["nuevo_nivel"])
+        log(f"J{jugador.id_jugador} ajusta impuesto a {jugador.nivel_impuesto}%")
+
+    elif tipo == "RECLUTAR":
+        provincia = partida.provincias[orden["id_provincia"]]
+        costo = orden["cantidad"] * params.costo_reclutamiento_por_tropa
+        if provincia.id_propietario == jugador.id_jugador and jugador.oro_tesoro >= costo:
+            jugador.oro_tesoro -= costo
+            provincia.tropas_guarnicion += orden["cantidad"]
+            log(f"J{jugador.id_jugador} recluta {orden['cantidad']} tropas en P{provincia.id_provincia}")
+
+    elif tipo == "FORTIFICAR":
+        provincia = partida.provincias[orden["id_provincia"]]
+        if provincia.id_propietario == jugador.id_jugador and jugador.oro_tesoro >= params.costo_fortificacion:
+            jugador.oro_tesoro -= params.costo_fortificacion
+            provincia.fortificada = True
+            log(f"J{jugador.id_jugador} fortifica P{provincia.id_provincia}")
+
+    elif tipo == "DECRETO_FELICIDAD":
+        provincia = partida.provincias[orden["id_provincia"]]
+        if provincia.id_propietario == jugador.id_jugador and jugador.oro_tesoro >= params.costo_decreto:
+            jugador.oro_tesoro -= params.costo_decreto
+            provincia.nivel_felicidad = min(100.0, provincia.nivel_felicidad + params.delta_decreto_felicidad)
+            log(f"J{jugador.id_jugador} aplica decreto de felicidad en P{provincia.id_provincia}")
+
+    elif tipo == "ABANDONAR":
+        provincia = partida.provincias[orden["id_provincia"]]
+        if provincia.id_propietario == jugador.id_jugador:
+            provincia.id_propietario = SIN_DUENO
+            jugador.provincias_controladas.remove(provincia.id_provincia)
+            log(f"J{jugador.id_jugador} abandona P{provincia.id_provincia}")
+
+    elif tipo == "DESMANTELAR":
+        provincia = partida.provincias[orden["id_provincia"]]
+        if provincia.id_propietario == jugador.id_jugador:
+            provincia.tropas_guarnicion = max(0, provincia.tropas_guarnicion - orden["cantidad"])
+            log(f"J{jugador.id_jugador} desmantela {orden['cantidad']} tropas en P{provincia.id_provincia}")
+
+    elif tipo == "GUERRA":
+        jugador.relaciones_diplomaticas[orden["id_objetivo"]] = "GUERRA"
+        partida.jugadores[orden["id_objetivo"]].relaciones_diplomaticas[jugador.id_jugador] = "GUERRA"
+        log(f"J{jugador.id_jugador} declara guerra a J{orden['id_objetivo']}")
+
+    elif tipo == "MOVER":
+        _aplicar_movimiento(partida, params, jugador, orden, log)
+
+    elif tipo == "PASAR":
+        pass
