@@ -362,14 +362,13 @@ def ejecutar_partida(partida, params, rng, obtener_ordenes, log, turnos_minimos=
             orden_jugadores = [j for j in orden_jugadores if j in partida.jugadores_activos]
             if not orden_jugadores:
                 break
-            if idx >= len(orden_jugadores):
-                idx = 0
+            idx = (idx + 1) % len(orden_jugadores)
+            if idx == 0:
                 partida.turno_actual += 1
                 if contexto["turnos_completados"] >= turnos_minimos * len(orden_jugadores):
                     if continuar_callback is None or not continuar_callback(partida):
                         break
             siguiente_id = orden_jugadores[idx]
-            idx += 1
             cola.push(evento.tiempo + 1.0, TipoEvento.INICIO_TURNO, {"id_jugador": siguiente_id}, {})
 
     return partida
