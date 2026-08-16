@@ -12,6 +12,12 @@ Motor de simulación de eventos discretos (back-end) del caso de estudio Age of 
 ## Tests
     pytest tests/ -v
 
+## Extra: ejecutar con uv (sin instalar nada globalmente)
+Si tienes [uv](https://docs.astral.sh/uv/) instalado, no hace falta crear un venv ni instalar pytest a mano:
+
+    uv run --with pytest python3 main.py --seed 42
+    uv run --with pytest pytest tests/ -v
+
 ## Estructura
 - `aoc_sim/models.py` — entidades del Modelo Conceptual (Partida, Jugador, Provincia, Ejercito).
 - `aoc_sim/events.py` — cola de eventos (`EventQueue`) y tipos de evento.
