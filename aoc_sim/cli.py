@@ -1,4 +1,4 @@
-from .models import TipoControl
+from .models import TipoControl, SIN_DUENO
 from .ai import decidir_ordenes_ia
 
 MENU = """
@@ -31,6 +31,17 @@ def _listar_provincias_propias(jugador, partida, salida, encabezado="Tus provinc
         salida(f"  P{p.id_provincia}: tropas={p.tropas_guarnicion} felicidad={p.nivel_felicidad:.0f}%{etiqueta}")
 
 
+def _describir_vecino(jugador, partida, id_vecino):
+    v = partida.provincias[id_vecino]
+    if v.id_propietario == jugador.id_jugador:
+        return f"P{id_vecino} (propia, tropas={v.tropas_guarnicion})"
+    if v.id_propietario == SIN_DUENO:
+        return f"P{id_vecino} (sin dueño, tropas={v.tropas_guarnicion}) [ATACABLE]"
+    fort = " fortificada" if v.fortificada else ""
+    return (f"P{id_vecino} (enemiga de J{v.id_propietario}, "
+            f"tropas={v.tropas_guarnicion}{fort}) [ATACABLE]")
+
+
 def _listar_ejercitos_propios(jugador, partida, salida):
     ejercitos = [e for e in partida.ejercitos.values() if e.id_propietario == jugador.id_jugador]
     salida("Tus ejercitos:")
@@ -39,9 +50,12 @@ def _listar_ejercitos_propios(jugador, partida, salida):
         return
     for e in ejercitos:
         origen = partida.provincias[e.nodo_posicion_id]
-        vecinos = ", ".join(f"P{v}" for v in origen.nodos_vecinos) or "ninguno"
-        salida(f"  E{e.id_ejercito}: fuerza={e.cantidad_fuerza} en P{origen.id_provincia} "
-               f"(vecinos: {vecinos})")
+        if origen.nodos_vecinos:
+            vecinos = ", ".join(_describir_vecino(jugador, partida, v) for v in origen.nodos_vecinos)
+        else:
+            vecinos = "ninguno"
+        salida(f"  E{e.id_ejercito}: fuerza={e.cantidad_fuerza} en P{origen.id_provincia}")
+        salida(f"    vecinos: {vecinos}")
 
 
 def _listar_otros_jugadores(jugador, partida, salida):
