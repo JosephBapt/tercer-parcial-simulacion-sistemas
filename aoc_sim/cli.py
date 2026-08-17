@@ -70,9 +70,16 @@ def _listar_otros_jugadores(jugador, partida, salida):
         salida(f"  J{id_otro} ({otro.tipo_control.value}): relacion={relacion}")
 
 
-def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=print):
+def _limpiar_pantalla_real():
+    print("\033[H\033[J", end="")
+
+
+def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=print, limpiar=None):
+    if limpiar is None:
+        limpiar = _limpiar_pantalla_real
     ordenes = []
     while True:
+        limpiar()
         salida(MENU.format(id_jugador=jugador.id_jugador, turno=partida.turno_actual))
         opcion = entrada("Elige una opcion: ").strip()
 
