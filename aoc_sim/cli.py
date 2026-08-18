@@ -74,12 +74,24 @@ def _limpiar_pantalla_real():
     print("\033[H\033[J", end="")
 
 
-def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=print, limpiar=None):
+def _mostrar_resumen_turno(resumen, salida, titulo="Lo que paso este turno"):
+    if not resumen:
+        return
+    salida(f"=== {titulo} ===")
+    for linea in resumen:
+        salida(linea)
+    salida("")
+
+
+def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=print, limpiar=None, resumen=None):
     if limpiar is None:
         limpiar = _limpiar_pantalla_real
+    if resumen is None:
+        resumen = []
     ordenes = []
     while True:
         limpiar()
+        _mostrar_resumen_turno(resumen, salida)
         salida(MENU.format(id_jugador=jugador.id_jugador, turno=partida.turno_actual))
         opcion = entrada("Elige una opcion: ").strip()
 
@@ -131,6 +143,9 @@ def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=pri
                 salida("Opcion invalida.")
         except ValueError:
             salida("Entrada invalida: se esperaba un numero. Orden descartada.")
+
+    limpiar()
+    _mostrar_resumen_turno(resumen, salida, titulo="Resumen final de tu turno")
     return ordenes
 
 

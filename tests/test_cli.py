@@ -85,6 +85,19 @@ def test_menu_muestra_provincias_y_oro_antes_de_pedir_reclutar():
     assert any("P1: tropas=100" in linea for linea in salidas)
 
 
+def test_menu_muestra_resumen_del_turno_al_pasar():
+    partida, j1 = _partida_un_jugador()
+    resumen = ["t=0.002 EV_RECAUDAR_IMPUESTOS J1 +100.00", "t=0.004 EV_LIQUIDAR_MANTENIMIENTO J1 -5.00"]
+    salidas = []
+    entradas = iter(["9"])
+    menu_ordenes_humano(j1, partida, PARAMS, rng=None,
+                         entrada=lambda _prompt="": next(entradas), salida=salidas.append,
+                         limpiar=lambda: None, resumen=resumen)
+    assert any("Resumen final de tu turno" in l for l in salidas)
+    assert any("EV_RECAUDAR_IMPUESTOS J1 +100.00" in l for l in salidas)
+    assert any("EV_LIQUIDAR_MANTENIMIENTO J1 -5.00" in l for l in salidas)
+
+
 def test_obtener_ordenes_mixto_despacha_a_ia():
     p1 = Provincia(id_provincia=1, id_propietario=1, poblacion_base=1000, nivel_felicidad=80,
                     nivel_infraestructura=1, tropas_guarnicion=100, nodos_vecinos=[])

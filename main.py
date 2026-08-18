@@ -3,7 +3,9 @@ import random
 
 from aoc_sim.scenario import cargar_parametros, cargar_escenario
 from aoc_sim.engine import ejecutar_partida
-from aoc_sim.cli import obtener_ordenes_mixto
+from aoc_sim.models import TipoControl
+from aoc_sim.ai import decidir_ordenes_ia
+from aoc_sim.cli import menu_ordenes_humano
 
 
 def _resumen_estado(partida):
@@ -37,9 +39,23 @@ def main():
         respuesta = input("Continuar otro turno? (s/n): ").strip().lower()
         return respuesta == "s"
 
+    resumen_turno_actual = []
+
+    def log_y_registrar(mensaje):
+        if "EV_INICIO_TURNO" in mensaje:
+            resumen_turno_actual.clear()
+        print(mensaje)
+        resumen_turno_actual.append(mensaje)
+
+    def obtener_ordenes(jugador, partida_actual, params_actuales, rng_actual):
+        if jugador.tipo_control == TipoControl.HUMANO:
+            return menu_ordenes_humano(jugador, partida_actual, params_actuales, rng_actual,
+                                        resumen=resumen_turno_actual)
+        return decidir_ordenes_ia(jugador, partida_actual, params_actuales, rng_actual)
+
     ejecutar_partida(
-        partida, params, rng, obtener_ordenes=obtener_ordenes_mixto,
-        log=print, turnos_minimos=args.turnos_min, continuar_callback=continuar,
+        partida, params, rng, obtener_ordenes=obtener_ordenes,
+        log=log_y_registrar, turnos_minimos=args.turnos_min, continuar_callback=continuar,
     )
 
     print(_resumen_estado(partida))
