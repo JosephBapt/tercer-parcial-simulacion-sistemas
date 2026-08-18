@@ -144,6 +144,12 @@ def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=pri
         except ValueError:
             salida("Entrada invalida: se esperaba un numero. Orden descartada.")
 
+        salida("")
+        salida("=== Estado actual ===")
+        _listar_provincias_propias(jugador, partida, salida)
+        _listar_ejercitos_propios(jugador, partida, salida)
+        entrada("Presiona Enter para continuar...")
+
     limpiar()
     _mostrar_resumen_turno(resumen, salida, titulo="Resumen final de tu turno")
     return ordenes
