@@ -83,11 +83,24 @@ def _mostrar_resumen_turno(resumen, salida, titulo="Lo que paso este turno"):
     salida("")
 
 
+def _mostrar_estado_completo(jugador, partida, salida, titulo="Tu estado actual"):
+    salida(f"=== {titulo} ===")
+    _listar_provincias_propias(jugador, partida, salida)
+    _listar_ejercitos_propios(jugador, partida, salida)
+    salida("")
+
+
 def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=print, limpiar=None, resumen=None):
     if limpiar is None:
         limpiar = _limpiar_pantalla_real
     if resumen is None:
         resumen = []
+
+    limpiar()
+    _mostrar_resumen_turno(resumen, salida)
+    _mostrar_estado_completo(jugador, partida, salida, titulo="Tu estado al iniciar el turno")
+    entrada("Presiona Enter para ver el menu de ordenes...")
+
     ordenes = []
     while True:
         limpiar()
@@ -145,13 +158,12 @@ def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=pri
             salida("Entrada invalida: se esperaba un numero. Orden descartada.")
 
         salida("")
-        salida("=== Estado actual ===")
-        _listar_provincias_propias(jugador, partida, salida)
-        _listar_ejercitos_propios(jugador, partida, salida)
+        _mostrar_estado_completo(jugador, partida, salida, titulo="Estado actual")
         entrada("Presiona Enter para continuar...")
 
     limpiar()
     _mostrar_resumen_turno(resumen, salida, titulo="Resumen final de tu turno")
+    _mostrar_estado_completo(jugador, partida, salida, titulo="Tu estado al finalizar el turno")
     return ordenes
 
 
