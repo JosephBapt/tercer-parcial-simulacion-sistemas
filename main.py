@@ -2,7 +2,7 @@ import argparse
 import random
 
 from aoc_sim.scenario import cargar_parametros, cargar_escenario
-from aoc_sim.engine import ejecutar_partida
+from aoc_sim.engine import ejecutar_partida, aplicar_orden
 from aoc_sim.models import TipoControl
 from aoc_sim.ai import decidir_ordenes_ia
 from aoc_sim.cli import menu_ordenes_humano
@@ -49,8 +49,11 @@ def main():
 
     def obtener_ordenes(jugador, partida_actual, params_actuales, rng_actual):
         if jugador.tipo_control == TipoControl.HUMANO:
+            def aplicar_inline(orden):
+                aplicar_orden(partida_actual, params_actuales, jugador, orden, rng_actual, log_y_registrar)
+
             return menu_ordenes_humano(jugador, partida_actual, params_actuales, rng_actual,
-                                        resumen=resumen_turno_actual)
+                                        resumen=resumen_turno_actual, aplicar=aplicar_inline)
         return decidir_ordenes_ia(jugador, partida_actual, params_actuales, rng_actual)
 
     ejecutar_partida(

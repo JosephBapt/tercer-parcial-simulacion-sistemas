@@ -94,7 +94,8 @@ def _mostrar_estado_completo(jugador, partida, salida, titulo="Tu estado actual"
     salida("")
 
 
-def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=print, limpiar=None, resumen=None):
+def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=print, limpiar=None,
+                         resumen=None, aplicar=None):
     if limpiar is None:
         limpiar = _limpiar_pantalla_real
     if resumen is None:
@@ -115,6 +116,7 @@ def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=pri
         if opcion == "12" or opcion == "":
             break
 
+        cantidad_ordenes_antes = len(ordenes)
         try:
             if opcion == "1":
                 _listar_ejercitos_propios(jugador, partida, salida)
@@ -178,14 +180,22 @@ def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=pri
         except ValueError:
             salida("Entrada invalida: se esperaba un numero. Orden descartada.")
 
+        if aplicar is not None and len(ordenes) > cantidad_ordenes_antes:
+            aplicar(ordenes[-1])
+
         salida("")
         _mostrar_estado_completo(jugador, partida, salida, titulo="Estado actual")
+
+        if partida.finalizada:
+            salida("La partida ha finalizado con esa orden.")
+            break
+
         entrada("Presiona Enter para continuar...")
 
     limpiar()
     _mostrar_resumen_turno(resumen, salida, titulo="Resumen final de tu turno")
     _mostrar_estado_completo(jugador, partida, salida, titulo="Tu estado al finalizar el turno")
-    return ordenes
+    return [] if aplicar is not None else ordenes
 
 
 def obtener_ordenes_mixto(jugador, partida, params, rng):

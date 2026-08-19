@@ -150,6 +150,41 @@ def test_menu_muestra_resumen_del_turno_al_pasar():
     assert any("EV_LIQUIDAR_MANTENIMIENTO J1 -5.00" in l for l in salidas)
 
 
+def test_menu_con_aplicar_ejecuta_la_orden_de_inmediato_y_retorna_lista_vacia():
+    partida, j1 = _partida_un_jugador()
+    aplicadas = []
+
+    def aplicar_impuesto(orden):
+        aplicadas.append(orden)
+        if orden["tipo"] == "IMPUESTO":
+            j1.nivel_impuesto = orden["nuevo_nivel"]
+
+    entradas = iter(["", "4", "35", "", "12"])  # ajustar impuesto a 35
+    ordenes = menu_ordenes_humano(j1, partida, PARAMS, rng=None,
+                                   entrada=lambda _prompt="": next(entradas), salida=lambda m: None,
+                                   limpiar=lambda: None, aplicar=aplicar_impuesto)
+    assert aplicadas == [{"tipo": "IMPUESTO", "nuevo_nivel": 35.0}]
+    assert j1.nivel_impuesto == 35.0  # aplicado de inmediato, no solo encolado
+    assert ordenes == []  # el llamador ya la aplico, no debe reaplicarse
+
+
+def test_menu_estado_actual_refleja_la_orden_recien_aplicada():
+    partida, j1 = _partida_un_jugador()
+
+    def aplicar_reclutar(orden):
+        if orden["tipo"] == "RECLUTAR":
+            partida.provincias[1].tropas_guarnicion += orden["cantidad"]
+            j1.oro_tesoro -= orden["cantidad"] * PARAMS.costo_reclutamiento_por_tropa
+
+    salidas = []
+    entradas = iter(["", "5", "1", "20", "", "12"])
+    menu_ordenes_humano(j1, partida, PARAMS, rng=None,
+                         entrada=lambda _prompt="": next(entradas), salida=salidas.append,
+                         limpiar=lambda: None, aplicar=aplicar_reclutar)
+    # el "Estado actual" impreso tras la orden ya debe mostrar 120, no 100
+    assert any("P1: tropas=120" in l for l in salidas)
+
+
 def test_obtener_ordenes_mixto_despacha_a_ia():
     p1 = Provincia(id_provincia=1, id_propietario=1, poblacion_base=1000, nivel_felicidad=80,
                     nivel_infraestructura=1, tropas_guarnicion=100, nodos_vecinos=[])
