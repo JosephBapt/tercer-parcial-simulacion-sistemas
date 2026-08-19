@@ -237,6 +237,18 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
         partida.jugadores[orden["id_objetivo"]].relaciones_diplomaticas[jugador.id_jugador] = "GUERRA"
         log(f"J{jugador.id_jugador} declara guerra a J{orden['id_objetivo']}")
 
+    elif tipo == "REFORZAR_EJERCITO":
+        ejercito = partida.ejercitos.get(orden["id_ejercito"])
+        if ejercito is not None and ejercito.id_propietario == jugador.id_jugador and orden["cantidad"] > 0:
+            provincia = partida.provincias[ejercito.nodo_posicion_id]
+            cantidad = orden["cantidad"]
+            if provincia.tropas_guarnicion >= cantidad:
+                provincia.tropas_guarnicion -= cantidad
+                ejercito.cantidad_fuerza += cantidad
+                log(f"J{jugador.id_jugador} fusiona {cantidad} tropas de la guarnicion de "
+                    f"P{provincia.id_provincia} al ejercito E{ejercito.id_ejercito} "
+                    f"(fuerza={ejercito.cantidad_fuerza})")
+
     elif tipo == "MOVER":
         _aplicar_movimiento(partida, params, jugador, orden, log)
 

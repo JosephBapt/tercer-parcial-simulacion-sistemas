@@ -145,6 +145,39 @@ def test_orden_decreto_felicidad():
     assert j1.oro_tesoro == 450.0
 
 
+def test_orden_reforzar_ejercito_mueve_tropas_de_guarnicion_a_fuerza():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "REFORZAR_EJERCITO", "id_ejercito": 1, "cantidad": 30},
+                  None, log=lambda m: None)
+    assert partida.ejercitos[1].cantidad_fuerza == 90  # 60+30
+    assert partida.provincias[1].tropas_guarnicion == 70  # 100-30
+
+
+def test_orden_reforzar_ejercito_sin_guarnicion_suficiente_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "REFORZAR_EJERCITO", "id_ejercito": 1, "cantidad": 500},
+                  None, log=lambda m: None)
+    assert partida.ejercitos[1].cantidad_fuerza == 60
+    assert partida.provincias[1].tropas_guarnicion == 100
+
+
+def test_orden_reforzar_ejercito_cantidad_negativa_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "REFORZAR_EJERCITO", "id_ejercito": 1, "cantidad": -10},
+                  None, log=lambda m: None)
+    assert partida.ejercitos[1].cantidad_fuerza == 60
+    assert partida.provincias[1].tropas_guarnicion == 100
+
+
+def test_orden_reforzar_ejercito_ajeno_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    partida.ejercitos[2] = Ejercito(id_ejercito=2, id_propietario=2, cantidad_fuerza=10, nodo_posicion_id=2)
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "REFORZAR_EJERCITO", "id_ejercito": 2, "cantidad": 5},
+                  None, log=lambda m: None)
+    assert partida.ejercitos[2].cantidad_fuerza == 10
+    assert partida.provincias[2].tropas_guarnicion == 20
+
+
 def test_orden_pasar_no_hace_nada():
     partida, j1 = _partida_dos_jugadores()
     oro_antes = j1.oro_tesoro
