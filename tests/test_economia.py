@@ -1,11 +1,11 @@
 from types import SimpleNamespace
 from aoc_sim.models import Provincia, Jugador, TipoControl
 from aoc_sim.engine import (
-    calcular_ingreso_impuesto, calcular_ingreso_anual,
+    calcular_ingreso_impuesto, calcular_ingreso_anual, calcular_ingreso_comercio,
     calcular_mantenimiento, aplicar_mantenimiento,
 )
 
-PARAMS = SimpleNamespace(c_m=0.05, m_min=1.0, g_anual=0.05, per_anual=12)
+PARAMS = SimpleNamespace(c_m=0.05, m_min=1.0, g_anual=0.05, per_anual=12, comercio_por_poblacion=0.02)
 
 
 def _provincia(id_provincia, poblacion, felicidad, infraestructura, tropas):
@@ -23,6 +23,16 @@ def test_ingreso_impuesto_formula_exacta():
     p = _provincia(1, poblacion=1000, felicidad=50, infraestructura=2, tropas=0)
     # 1000 * 20 * 0.5 * 2 = 20000
     assert calcular_ingreso_impuesto(p, nivel_impuesto=20) == 20000.0
+
+
+def test_ingreso_comercio_proporcional_a_poblacion():
+    provincias = [_provincia(1, 1000, 80, 1, 0), _provincia(2, 2000, 80, 1, 0)]
+    # 0.02*1000 + 0.02*2000 = 60
+    assert calcular_ingreso_comercio(provincias, PARAMS) == 60.0
+
+
+def test_ingreso_comercio_sin_provincias_es_cero():
+    assert calcular_ingreso_comercio([], PARAMS) == 0.0
 
 
 def test_ingreso_anual_excluido_en_turno_cero():

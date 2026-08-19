@@ -8,6 +8,7 @@ class TipoEvento(Enum):
     INICIO_TURNO = auto()
     PROCESAR_DEMOGRAFIA = auto()
     RECAUDAR_IMPUESTOS = auto()
+    RECAUDAR_COMERCIO = auto()
     RECAUDAR_IMPUESTO_ANUAL = auto()
     LIQUIDAR_MANTENIMIENTO = auto()
     FASE_ORDENES = auto()

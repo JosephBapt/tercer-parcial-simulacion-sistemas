@@ -32,6 +32,8 @@ class Parametros:
     costo_fortificacion: float
     costo_decreto: float
     delta_decreto_felicidad: float
+    costo_infraestructura: float
+    comercio_por_poblacion: float
 
 
 def cargar_parametros(path: str) -> Parametros:

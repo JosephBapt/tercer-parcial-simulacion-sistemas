@@ -3,7 +3,7 @@
 import math
 
 from .events import EventQueue, TipoEvento
-from .models import SIN_DUENO
+from .models import SIN_DUENO, Ejercito
 
 
 def calcular_fuerza_ataque(atacante, params):
@@ -56,6 +56,10 @@ def resolver_combate(atacante, defensor, params):
 def calcular_ingreso_impuesto(provincia, nivel_impuesto):
     factor_felicidad = provincia.nivel_felicidad / 100.0
     return provincia.poblacion_base * nivel_impuesto * factor_felicidad * provincia.nivel_infraestructura
+
+
+def calcular_ingreso_comercio(provincias_jugador, params):
+    return sum(params.comercio_por_poblacion * p.poblacion_base for p in provincias_jugador)
 
 
 def calcular_ingreso_anual(provincias_jugador, turno_actual, params):
@@ -187,6 +191,17 @@ def _aplicar_movimiento(partida, params, jugador, orden, log):
     del partida.ejercitos[ejercito.id_ejercito]
 
 
+def _provincia_propia(partida, jugador, id_provincia, log):
+    provincia = partida.provincias.get(id_provincia)
+    if provincia is None:
+        log(f"J{jugador.id_jugador}: la provincia P{id_provincia} no existe. Orden descartada.")
+        return None
+    if provincia.id_propietario != jugador.id_jugador:
+        log(f"J{jugador.id_jugador}: P{id_provincia} no es tuya. Orden descartada.")
+        return None
+    return provincia
+
+
 def aplicar_orden(partida, params, jugador, orden, rng, log):
     tipo = orden["tipo"]
 
@@ -195,51 +210,68 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
         log(f"J{jugador.id_jugador} ajusta impuesto a {jugador.nivel_impuesto}%")
 
     elif tipo == "RECLUTAR":
-        provincia = partida.provincias[orden["id_provincia"]]
-        costo = orden["cantidad"] * params.costo_reclutamiento_por_tropa
-        if (orden["cantidad"] > 0 and provincia.id_propietario == jugador.id_jugador
-                and jugador.oro_tesoro >= costo):
-            jugador.oro_tesoro -= costo
-            provincia.tropas_guarnicion += orden["cantidad"]
-            log(f"J{jugador.id_jugador} recluta {orden['cantidad']} tropas en P{provincia.id_provincia}")
+        provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
+        if provincia is not None:
+            costo = orden["cantidad"] * params.costo_reclutamiento_por_tropa
+            if orden["cantidad"] > 0 and jugador.oro_tesoro >= costo:
+                jugador.oro_tesoro -= costo
+                provincia.tropas_guarnicion += orden["cantidad"]
+                log(f"J{jugador.id_jugador} recluta {orden['cantidad']} tropas en P{provincia.id_provincia}")
 
     elif tipo == "FORTIFICAR":
-        provincia = partida.provincias[orden["id_provincia"]]
-        if provincia.id_propietario == jugador.id_jugador and jugador.oro_tesoro >= params.costo_fortificacion:
+        provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
+        if provincia is not None and jugador.oro_tesoro >= params.costo_fortificacion:
             jugador.oro_tesoro -= params.costo_fortificacion
             provincia.fortificada = True
             log(f"J{jugador.id_jugador} fortifica P{provincia.id_provincia}")
 
+    elif tipo == "INVERTIR_INFRAESTRUCTURA":
+        provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
+        if provincia is not None and jugador.oro_tesoro >= params.costo_infraestructura:
+            jugador.oro_tesoro -= params.costo_infraestructura
+            provincia.nivel_infraestructura += 1
+            log(f"J{jugador.id_jugador} invierte en infraestructura de P{provincia.id_provincia} "
+                f"(nivel={provincia.nivel_infraestructura})")
+
     elif tipo == "DECRETO_FELICIDAD":
-        provincia = partida.provincias[orden["id_provincia"]]
-        if provincia.id_propietario == jugador.id_jugador and jugador.oro_tesoro >= params.costo_decreto:
+        provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
+        if provincia is not None and jugador.oro_tesoro >= params.costo_decreto:
             jugador.oro_tesoro -= params.costo_decreto
             provincia.nivel_felicidad = min(100.0, provincia.nivel_felicidad + params.delta_decreto_felicidad)
             log(f"J{jugador.id_jugador} aplica decreto de felicidad en P{provincia.id_provincia}")
 
     elif tipo == "ABANDONAR":
-        provincia = partida.provincias[orden["id_provincia"]]
-        if provincia.id_propietario == jugador.id_jugador and provincia.tiene_rey:
-            log(f"J{jugador.id_jugador} no puede abandonar P{provincia.id_provincia}: contiene al rey")
-        elif provincia.id_propietario == jugador.id_jugador:
-            provincia.id_propietario = SIN_DUENO
-            jugador.provincias_controladas.remove(provincia.id_provincia)
-            log(f"J{jugador.id_jugador} abandona P{provincia.id_provincia}")
+        provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
+        if provincia is not None:
+            if provincia.tiene_rey:
+                log(f"J{jugador.id_jugador} no puede abandonar P{provincia.id_provincia}: contiene al rey")
+            else:
+                provincia.id_propietario = SIN_DUENO
+                jugador.provincias_controladas.remove(provincia.id_provincia)
+                log(f"J{jugador.id_jugador} abandona P{provincia.id_provincia}")
 
     elif tipo == "DESMANTELAR":
-        provincia = partida.provincias[orden["id_provincia"]]
-        if orden["cantidad"] > 0 and provincia.id_propietario == jugador.id_jugador:
+        provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
+        if provincia is not None and orden["cantidad"] > 0:
             provincia.tropas_guarnicion = max(0, provincia.tropas_guarnicion - orden["cantidad"])
             log(f"J{jugador.id_jugador} desmantela {orden['cantidad']} tropas en P{provincia.id_provincia}")
 
     elif tipo == "GUERRA":
-        jugador.relaciones_diplomaticas[orden["id_objetivo"]] = "GUERRA"
-        partida.jugadores[orden["id_objetivo"]].relaciones_diplomaticas[jugador.id_jugador] = "GUERRA"
-        log(f"J{jugador.id_jugador} declara guerra a J{orden['id_objetivo']}")
+        id_objetivo = orden["id_objetivo"]
+        if id_objetivo not in partida.jugadores:
+            log(f"J{jugador.id_jugador}: el jugador J{id_objetivo} no existe. Orden descartada.")
+        elif id_objetivo == jugador.id_jugador:
+            log(f"J{jugador.id_jugador}: no puedes declararte la guerra a ti mismo.")
+        else:
+            jugador.relaciones_diplomaticas[id_objetivo] = "GUERRA"
+            partida.jugadores[id_objetivo].relaciones_diplomaticas[jugador.id_jugador] = "GUERRA"
+            log(f"J{jugador.id_jugador} declara guerra a J{id_objetivo}")
 
     elif tipo == "REFORZAR_EJERCITO":
         ejercito = partida.ejercitos.get(orden["id_ejercito"])
-        if ejercito is not None and ejercito.id_propietario == jugador.id_jugador and orden["cantidad"] > 0:
+        if ejercito is None or ejercito.id_propietario != jugador.id_jugador:
+            log(f"J{jugador.id_jugador}: el ejercito E{orden['id_ejercito']} no existe o no es tuyo.")
+        elif orden["cantidad"] > 0:
             provincia = partida.provincias[ejercito.nodo_posicion_id]
             cantidad = orden["cantidad"]
             if provincia.tropas_guarnicion >= cantidad:
@@ -248,6 +280,24 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
                 log(f"J{jugador.id_jugador} fusiona {cantidad} tropas de la guarnicion de "
                     f"P{provincia.id_provincia} al ejercito E{ejercito.id_ejercito} "
                     f"(fuerza={ejercito.cantidad_fuerza})")
+
+    elif tipo == "DIVIDIR_EJERCITO":
+        ejercito = partida.ejercitos.get(orden["id_ejercito"])
+        if ejercito is None or ejercito.id_propietario != jugador.id_jugador:
+            log(f"J{jugador.id_jugador}: el ejercito E{orden['id_ejercito']} no existe o no es tuyo.")
+        elif 0 < orden["cantidad"] < ejercito.cantidad_fuerza:
+            nuevo_id = max(partida.ejercitos.keys(), default=0) + 1
+            ejercito.cantidad_fuerza -= orden["cantidad"]
+            nuevo_ejercito = Ejercito(
+                id_ejercito=nuevo_id, id_propietario=jugador.id_jugador,
+                cantidad_fuerza=orden["cantidad"], nodo_posicion_id=ejercito.nodo_posicion_id,
+            )
+            partida.ejercitos[nuevo_id] = nuevo_ejercito
+            log(f"J{jugador.id_jugador} divide E{ejercito.id_ejercito}: queda con "
+                f"{ejercito.cantidad_fuerza}, nuevo E{nuevo_id} con {orden['cantidad']}")
+        else:
+            log(f"J{jugador.id_jugador}: cantidad invalida para dividir E{ejercito.id_ejercito} "
+                f"(fuerza={ejercito.cantidad_fuerza})")
 
     elif tipo == "MOVER":
         _aplicar_movimiento(partida, params, jugador, orden, log)
@@ -282,6 +332,16 @@ def _h_recaudar_impuestos(partida, params, evento, rng, log, contexto):
     jugador.oro_tesoro += ingreso
     contexto["ingreso_impuesto"][jugador.id_jugador] = ingreso
     log(f"t={evento.tiempo:.3f} EV_RECAUDAR_IMPUESTOS J{jugador.id_jugador} +{ingreso:.2f}")
+    return [(evento.tiempo + 0.001, TipoEvento.RECAUDAR_COMERCIO, evento.entidades, {})]
+
+
+def _h_recaudar_comercio(partida, params, evento, rng, log, contexto):
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    provincias_jugador = [partida.provincias[i] for i in jugador.provincias_controladas]
+    ingreso = calcular_ingreso_comercio(provincias_jugador, params)
+    jugador.oro_tesoro += ingreso
+    contexto["ingreso_comercio"][jugador.id_jugador] = ingreso
+    log(f"t={evento.tiempo:.3f} EV_RECAUDAR_COMERCIO J{jugador.id_jugador} +{ingreso:.2f}")
     return [(evento.tiempo + 0.001, TipoEvento.RECAUDAR_IMPUESTO_ANUAL, evento.entidades, {})]
 
 
@@ -331,7 +391,8 @@ def _h_gasto_administracion(partida, params, evento, rng, log, contexto):
     provincias_jugador = [partida.provincias[i] for i in jugador.provincias_controladas]
     total_provincias = len(partida.provincias)
     total_poblacion = sum(p.poblacion_base for p in partida.provincias.values())
-    ingreso_total = contexto["ingreso_impuesto"].get(jugador.id_jugador, 0.0)
+    ingreso_total = (contexto["ingreso_impuesto"].get(jugador.id_jugador, 0.0)
+                      + contexto["ingreso_comercio"].get(jugador.id_jugador, 0.0))
     gasto = calcular_gasto_administracion(provincias_jugador, total_provincias, total_poblacion, ingreso_total, params)
     aplicar_gasto_administracion(jugador, provincias_jugador, gasto, params)
     log(f"t={evento.tiempo:.3f} EV_GASTO_ADMINISTRACION J{jugador.id_jugador} -{gasto:.2f}")
@@ -353,6 +414,7 @@ _DESPACHO = {
     TipoEvento.INICIO_TURNO: _h_inicio_turno,
     TipoEvento.PROCESAR_DEMOGRAFIA: _h_procesar_demografia,
     TipoEvento.RECAUDAR_IMPUESTOS: _h_recaudar_impuestos,
+    TipoEvento.RECAUDAR_COMERCIO: _h_recaudar_comercio,
     TipoEvento.RECAUDAR_IMPUESTO_ANUAL: _h_recaudar_impuesto_anual,
     TipoEvento.LIQUIDAR_MANTENIMIENTO: _h_liquidar_mantenimiento,
     TipoEvento.FASE_ORDENES: _h_fase_ordenes,
@@ -364,8 +426,16 @@ _DESPACHO = {
 
 def ejecutar_partida(partida, params, rng, obtener_ordenes, log, turnos_minimos=5, continuar_callback=None):
     cola = EventQueue()
-    contexto = {"obtener_ordenes": obtener_ordenes, "ingreso_impuesto": {}, "turnos_completados": 0}
-    orden_jugadores = list(partida.jugadores_activos)
+    contexto = {
+        "obtener_ordenes": obtener_ordenes,
+        "ingreso_impuesto": {},
+        "ingreso_comercio": {},
+        "turnos_completados": 0,
+    }
+    # Ronda ordenada ascendentemente por puesto_clasificacion (debil -> fuerte),
+    # tal como especifica el pseudocodigo procesarCicloDeTurno del Segundo Parcial.
+    orden_jugadores = sorted(partida.jugadores_activos,
+                              key=lambda jid: partida.jugadores[jid].puesto_clasificacion)
     cola.push(0.0, TipoEvento.INICIO_TURNO, {"id_jugador": orden_jugadores[0]}, {})
 
     while cola and not partida.finalizada:

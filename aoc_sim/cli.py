@@ -5,14 +5,16 @@ MENU = """
 --- Ordenes de J{id_jugador} (turno {turno}) ---
 1. Mover/atacar ejercito
 2. Reforzar ejercito con guarnicion
-3. Ajustar impuestos
-4. Reclutar tropas
-5. Fortificar provincia
-6. Declarar guerra
-7. Abandonar provincia
-8. Desmantelar tropas
-9. Aplicar decreto de felicidad
-10. Pasar turno
+3. Dividir ejercito
+4. Ajustar impuestos
+5. Reclutar tropas
+6. Fortificar provincia
+7. Invertir en infraestructura
+8. Declarar guerra
+9. Abandonar provincia
+10. Desmantelar tropas
+11. Aplicar decreto de felicidad
+12. Pasar turno
 """
 
 
@@ -29,7 +31,8 @@ def _listar_provincias_propias(jugador, partida, salida, encabezado="Tus provinc
         if p.fortificada:
             marcas.append("fortificada")
         etiqueta = f" [{', '.join(marcas)}]" if marcas else ""
-        salida(f"  P{p.id_provincia}: tropas={p.tropas_guarnicion} felicidad={p.nivel_felicidad:.0f}%{etiqueta}")
+        salida(f"  P{p.id_provincia}: tropas={p.tropas_guarnicion} felicidad={p.nivel_felicidad:.0f}% "
+               f"infraestructura={p.nivel_infraestructura}{etiqueta}")
 
 
 def _describir_vecino(jugador, partida, id_vecino):
@@ -109,7 +112,7 @@ def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=pri
         salida(MENU.format(id_jugador=jugador.id_jugador, turno=partida.turno_actual))
         opcion = entrada("Elige una opcion: ").strip()
 
-        if opcion == "10" or opcion == "":
+        if opcion == "12" or opcion == "":
             break
 
         try:
@@ -125,35 +128,46 @@ def menu_ordenes_humano(jugador, partida, params, rng, entrada=input, salida=pri
                 cantidad = int(entrada("Cantidad de tropas a fusionar desde la guarnicion: "))
                 ordenes.append({"tipo": "REFORZAR_EJERCITO", "id_ejercito": id_ejercito, "cantidad": cantidad})
             elif opcion == "3":
+                _listar_ejercitos_propios(jugador, partida, salida)
+                id_ejercito = int(entrada("ID de ejercito propio a dividir: "))
+                cantidad = int(entrada("Cantidad de tropas para el nuevo ejercito: "))
+                ordenes.append({"tipo": "DIVIDIR_EJERCITO", "id_ejercito": id_ejercito, "cantidad": cantidad})
+            elif opcion == "4":
                 salida(f"Nivel de impuesto actual: {jugador.nivel_impuesto:.0f}%")
                 nuevo_nivel = float(entrada("Nuevo nivel de impuesto (%): "))
                 ordenes.append({"tipo": "IMPUESTO", "nuevo_nivel": nuevo_nivel})
-            elif opcion == "4":
+            elif opcion == "5":
                 _listar_provincias_propias(jugador, partida, salida)
                 salida(f"Costo por tropa: {params.costo_reclutamiento_por_tropa:.2f} oro")
                 id_prov = int(entrada("ID de provincia propia: "))
                 cantidad = int(entrada("Cantidad de tropas a reclutar: "))
                 ordenes.append({"tipo": "RECLUTAR", "id_provincia": id_prov, "cantidad": cantidad})
-            elif opcion == "5":
+            elif opcion == "6":
                 _listar_provincias_propias(jugador, partida, salida)
                 salida(f"Costo de fortificacion: {params.costo_fortificacion:.2f} oro")
                 id_prov = int(entrada("ID de provincia propia a fortificar: "))
                 ordenes.append({"tipo": "FORTIFICAR", "id_provincia": id_prov})
-            elif opcion == "6":
+            elif opcion == "7":
+                _listar_provincias_propias(jugador, partida, salida)
+                salida(f"Costo de infraestructura: {params.costo_infraestructura:.2f} oro "
+                       f"(+1 nivel, sube impuestos y crecimiento poblacional)")
+                id_prov = int(entrada("ID de provincia propia: "))
+                ordenes.append({"tipo": "INVERTIR_INFRAESTRUCTURA", "id_provincia": id_prov})
+            elif opcion == "8":
                 _listar_otros_jugadores(jugador, partida, salida)
                 id_objetivo = int(entrada("ID de jugador objetivo: "))
                 ordenes.append({"tipo": "GUERRA", "id_objetivo": id_objetivo})
-            elif opcion == "7":
+            elif opcion == "9":
                 _listar_provincias_propias(jugador, partida, salida)
                 salida("(No puedes abandonar la provincia donde esta tu rey)")
                 id_prov = int(entrada("ID de provincia propia a abandonar: "))
                 ordenes.append({"tipo": "ABANDONAR", "id_provincia": id_prov})
-            elif opcion == "8":
+            elif opcion == "10":
                 _listar_provincias_propias(jugador, partida, salida)
                 id_prov = int(entrada("ID de provincia propia: "))
                 cantidad = int(entrada("Cantidad de tropas a desmantelar: "))
                 ordenes.append({"tipo": "DESMANTELAR", "id_provincia": id_prov, "cantidad": cantidad})
-            elif opcion == "9":
+            elif opcion == "11":
                 _listar_provincias_propias(jugador, partida, salida)
                 salida(f"Costo del decreto: {params.costo_decreto:.2f} oro "
                        f"(+{params.delta_decreto_felicidad:.0f}% felicidad)")

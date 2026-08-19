@@ -5,7 +5,7 @@ from aoc_sim.engine import aplicar_orden
 PARAMS = SimpleNamespace(
     b_fort=1.0, b_rey_atk=1.0, b_rey_def=0.30, p_barco=0.30, p_conquista=25,
     costo_reclutamiento_por_tropa=2.0, costo_fortificacion=100.0,
-    costo_decreto=50.0, delta_decreto_felicidad=10.0,
+    costo_decreto=50.0, delta_decreto_felicidad=10.0, costo_infraestructura=200.0,
 )
 
 
@@ -138,6 +138,58 @@ def test_orden_guerra_marca_relacion_bidireccional():
     assert partida.jugadores[2].relaciones_diplomaticas[1] == "GUERRA"
 
 
+def test_orden_guerra_id_objetivo_inexistente_no_crashea():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "GUERRA", "id_objetivo": 999}, None, log=lambda m: None)
+    assert 999 not in j1.relaciones_diplomaticas
+
+
+def test_orden_guerra_a_si_mismo_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "GUERRA", "id_objetivo": 1}, None, log=lambda m: None)
+    assert 1 not in j1.relaciones_diplomaticas
+
+
+def test_orden_reclutar_id_provincia_inexistente_no_crashea():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "RECLUTAR", "id_provincia": 999, "cantidad": 10},
+                  None, log=lambda m: None)
+    assert j1.oro_tesoro == 500.0
+
+
+def test_orden_fortificar_id_provincia_inexistente_no_crashea():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "FORTIFICAR", "id_provincia": 999}, None, log=lambda m: None)
+    assert j1.oro_tesoro == 500.0
+
+
+def test_orden_decreto_id_provincia_inexistente_no_crashea():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "DECRETO_FELICIDAD", "id_provincia": 999}, None, log=lambda m: None)
+    assert j1.oro_tesoro == 500.0
+
+
+def test_orden_abandonar_id_provincia_inexistente_no_crashea():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "ABANDONAR", "id_provincia": 999}, None, log=lambda m: None)
+    assert 999 not in j1.provincias_controladas
+
+
+def test_orden_desmantelar_id_provincia_inexistente_no_crashea():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "DESMANTELAR", "id_provincia": 999, "cantidad": 10},
+                  None, log=lambda m: None)
+    assert partida.provincias[1].tropas_guarnicion == 100
+
+
+def test_orden_reclutar_provincia_ajena_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "RECLUTAR", "id_provincia": 2, "cantidad": 10},
+                  None, log=lambda m: None)
+    assert j1.oro_tesoro == 500.0
+    assert partida.provincias[2].tropas_guarnicion == 20
+
+
 def test_orden_decreto_felicidad():
     partida, j1 = _partida_dos_jugadores()
     aplicar_orden(partida, PARAMS, j1, {"tipo": "DECRETO_FELICIDAD", "id_provincia": 1}, None, log=lambda m: None)
@@ -176,6 +228,51 @@ def test_orden_reforzar_ejercito_ajeno_no_hace_nada():
                   None, log=lambda m: None)
     assert partida.ejercitos[2].cantidad_fuerza == 10
     assert partida.provincias[2].tropas_guarnicion == 20
+
+
+def test_orden_invertir_infraestructura_sube_nivel_y_cobra():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "INVERTIR_INFRAESTRUCTURA", "id_provincia": 1},
+                  None, log=lambda m: None)
+    assert partida.provincias[1].nivel_infraestructura == 2
+    assert j1.oro_tesoro == 300.0
+
+
+def test_orden_invertir_infraestructura_sin_oro_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    j1.oro_tesoro = 50.0
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "INVERTIR_INFRAESTRUCTURA", "id_provincia": 1},
+                  None, log=lambda m: None)
+    assert partida.provincias[1].nivel_infraestructura == 1
+    assert j1.oro_tesoro == 50.0
+
+
+def test_orden_dividir_ejercito_crea_nuevo_ejercito():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "DIVIDIR_EJERCITO", "id_ejercito": 1, "cantidad": 20},
+                  None, log=lambda m: None)
+    assert partida.ejercitos[1].cantidad_fuerza == 40
+    nuevo = next(e for e in partida.ejercitos.values() if e.id_ejercito != 1)
+    assert nuevo.cantidad_fuerza == 20
+    assert nuevo.nodo_posicion_id == 1
+    assert nuevo.id_propietario == 1
+
+
+def test_orden_dividir_ejercito_cantidad_igual_a_fuerza_total_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "DIVIDIR_EJERCITO", "id_ejercito": 1, "cantidad": 60},
+                  None, log=lambda m: None)
+    assert len(partida.ejercitos) == 1
+    assert partida.ejercitos[1].cantidad_fuerza == 60
+
+
+def test_orden_dividir_ejercito_ajeno_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    partida.ejercitos[2] = Ejercito(id_ejercito=2, id_propietario=2, cantidad_fuerza=10, nodo_posicion_id=2)
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "DIVIDIR_EJERCITO", "id_ejercito": 2, "cantidad": 5},
+                  None, log=lambda m: None)
+    assert len(partida.ejercitos) == 2
+    assert partida.ejercitos[2].cantidad_fuerza == 10
 
 
 def test_orden_pasar_no_hace_nada():

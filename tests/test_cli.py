@@ -4,7 +4,8 @@ from aoc_sim.cli import menu_ordenes_humano, obtener_ordenes_mixto
 
 PARAMS = SimpleNamespace(margen_ia=1.2, b_fort=1.0, b_rey_atk=1.0, b_rey_def=0.30, p_barco=0.30,
                           costo_fortificacion=100.0, costo_reclutamiento_por_tropa=2.0,
-                          costo_decreto=50.0, delta_decreto_felicidad=10.0)
+                          costo_decreto=50.0, delta_decreto_felicidad=10.0,
+                          costo_infraestructura=200.0)
 
 
 def _partida_un_jugador():
@@ -18,7 +19,7 @@ def _partida_un_jugador():
 
 def test_menu_recolecta_ordenes_hasta_pasar():
     partida, j1 = _partida_un_jugador()
-    entradas = iter(["", "3", "35", "", "10"])  # Enter inicial, 3=Ajustar impuestos, valor, Enter (pausa), 10=Pasar turno
+    entradas = iter(["", "4", "35", "", "12"])  # Enter inicial, 4=Ajustar impuestos, valor, Enter (pausa), 12=Pasar turno
     ordenes = menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                                    entrada=lambda _prompt="": next(entradas), salida=lambda m: None, limpiar=lambda: None)
     assert ordenes == [{"tipo": "IMPUESTO", "nuevo_nivel": 35.0}]
@@ -26,7 +27,7 @@ def test_menu_recolecta_ordenes_hasta_pasar():
 
 def test_menu_pasar_inmediato_da_lista_vacia():
     partida, j1 = _partida_un_jugador()
-    entradas = iter(["", "10"])
+    entradas = iter(["", "12"])
     ordenes = menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                                    entrada=lambda _prompt="": next(entradas), salida=lambda m: None, limpiar=lambda: None)
     assert ordenes == []
@@ -34,7 +35,7 @@ def test_menu_pasar_inmediato_da_lista_vacia():
 
 def test_menu_entrada_no_numerica_no_crashea_y_descarta_orden():
     partida, j1 = _partida_un_jugador()
-    entradas = iter(["", "3", "no-es-un-numero", "", "10"])
+    entradas = iter(["", "4", "no-es-un-numero", "", "12"])
     ordenes = menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                                    entrada=lambda _prompt="": next(entradas), salida=lambda m: None, limpiar=lambda: None)
     assert ordenes == []
@@ -44,7 +45,7 @@ def test_menu_muestra_ejercitos_disponibles_antes_de_pedir_mover():
     partida, j1 = _partida_un_jugador()
     partida.ejercitos[1] = Ejercito(id_ejercito=1, id_propietario=1, cantidad_fuerza=42, nodo_posicion_id=1)
     salidas = []
-    entradas = iter(["", "1", "1", "1", "", "10"])
+    entradas = iter(["", "1", "1", "1", "", "12"])
     menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                          entrada=lambda _prompt="": next(entradas), salida=salidas.append, limpiar=lambda: None)
     assert any("E1: fuerza=42" in linea for linea in salidas)
@@ -67,7 +68,7 @@ def test_menu_marca_vecinos_atacables_y_propios():
                                                nodo_posicion_id=1)},
                        jugadores_activos=[1, 2])
     salidas = []
-    entradas = iter(["", "1", "1", "3", "", "10"])
+    entradas = iter(["", "1", "1", "3", "", "12"])
     menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                          entrada=lambda _prompt="": next(entradas), salida=salidas.append, limpiar=lambda: None)
     linea_vecinos = next(l for l in salidas if "vecinos:" in l)
@@ -78,7 +79,7 @@ def test_menu_marca_vecinos_atacables_y_propios():
 def test_menu_muestra_provincias_y_oro_antes_de_pedir_reclutar():
     partida, j1 = _partida_un_jugador()
     salidas = []
-    entradas = iter(["", "4", "1", "5", "", "10"])
+    entradas = iter(["", "5", "1", "5", "", "12"])
     menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                          entrada=lambda _prompt="": next(entradas), salida=salidas.append, limpiar=lambda: None)
     assert any("oro disponible: 500.00" in linea for linea in salidas)
@@ -88,17 +89,36 @@ def test_menu_muestra_provincias_y_oro_antes_de_pedir_reclutar():
 def test_menu_opcion_2_encola_reforzar_ejercito():
     partida, j1 = _partida_un_jugador()
     partida.ejercitos[1] = Ejercito(id_ejercito=1, id_propietario=1, cantidad_fuerza=42, nodo_posicion_id=1)
-    entradas = iter(["", "2", "1", "20", "", "10"])
+    entradas = iter(["", "2", "1", "20", "", "12"])
     ordenes = menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                                    entrada=lambda _prompt="": next(entradas), salida=lambda m: None,
                                    limpiar=lambda: None)
     assert ordenes == [{"tipo": "REFORZAR_EJERCITO", "id_ejercito": 1, "cantidad": 20}]
 
 
+def test_menu_opcion_3_encola_dividir_ejercito():
+    partida, j1 = _partida_un_jugador()
+    partida.ejercitos[1] = Ejercito(id_ejercito=1, id_propietario=1, cantidad_fuerza=60, nodo_posicion_id=1)
+    entradas = iter(["", "3", "1", "20", "", "12"])
+    ordenes = menu_ordenes_humano(j1, partida, PARAMS, rng=None,
+                                   entrada=lambda _prompt="": next(entradas), salida=lambda m: None,
+                                   limpiar=lambda: None)
+    assert ordenes == [{"tipo": "DIVIDIR_EJERCITO", "id_ejercito": 1, "cantidad": 20}]
+
+
+def test_menu_opcion_7_encola_invertir_infraestructura():
+    partida, j1 = _partida_un_jugador()
+    entradas = iter(["", "7", "1", "", "12"])
+    ordenes = menu_ordenes_humano(j1, partida, PARAMS, rng=None,
+                                   entrada=lambda _prompt="": next(entradas), salida=lambda m: None,
+                                   limpiar=lambda: None)
+    assert ordenes == [{"tipo": "INVERTIR_INFRAESTRUCTURA", "id_provincia": 1}]
+
+
 def test_menu_muestra_estado_completo_al_iniciar_y_al_finalizar_turno():
     partida, j1 = _partida_un_jugador()
     salidas = []
-    entradas = iter(["", "10"])  # Enter inicial (ve estado), 10=Pasar turno
+    entradas = iter(["", "12"])  # Enter inicial (ve estado), 12=Pasar turno
     menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                          entrada=lambda _prompt="": next(entradas), salida=salidas.append, limpiar=lambda: None)
     assert any("Tu estado al iniciar el turno" in l for l in salidas)
@@ -110,7 +130,7 @@ def test_menu_muestra_estado_completo_al_iniciar_y_al_finalizar_turno():
 def test_menu_muestra_estado_y_pausa_tras_cada_accion():
     partida, j1 = _partida_un_jugador()
     salidas = []
-    valores = iter(["", "3", "35", "", "10"])
+    valores = iter(["", "4", "35", "", "12"])
     menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                          entrada=lambda _prompt="": next(valores), salida=salidas.append, limpiar=lambda: None)
     assert any("Estado actual" in l for l in salidas)
@@ -121,7 +141,7 @@ def test_menu_muestra_resumen_del_turno_al_pasar():
     partida, j1 = _partida_un_jugador()
     resumen = ["t=0.002 EV_RECAUDAR_IMPUESTOS J1 +100.00", "t=0.004 EV_LIQUIDAR_MANTENIMIENTO J1 -5.00"]
     salidas = []
-    entradas = iter(["", "10"])
+    entradas = iter(["", "12"])
     menu_ordenes_humano(j1, partida, PARAMS, rng=None,
                          entrada=lambda _prompt="": next(entradas), salida=salidas.append,
                          limpiar=lambda: None, resumen=resumen)

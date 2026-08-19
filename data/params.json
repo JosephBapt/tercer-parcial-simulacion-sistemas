@@ -24,5 +24,7 @@
   "costo_reclutamiento_por_tropa": 2.0,
   "costo_fortificacion": 100.0,
   "costo_decreto": 50.0,
-  "delta_decreto_felicidad": 10.0
+  "delta_decreto_felicidad": 10.0,
+  "costo_infraestructura": 200.0,
+  "comercio_por_poblacion": 0.3
 }
