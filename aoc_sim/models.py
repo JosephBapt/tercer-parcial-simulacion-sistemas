@@ -1,3 +1,5 @@
+"""Modelos de datos, entidades del juego (Partida, Jugador, Provincia, Ejercito) y enums"""
+
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -5,16 +7,19 @@ SIN_DUENO = 0
 
 
 class TipoControl(Enum):
+    """Tipo de control de un jugador"""
     HUMANO = "HUMANO"
     IA = "IA"
 
 
 class ObjetivoVictoria(Enum):
+    """Condición de victoria"""
     ANIQUILACION = "ANIQUILACION"
 
 
 @dataclass
 class Provincia:
+    """Representación de una región controlable"""
     id_provincia: int
     id_propietario: int
     poblacion_base: float
@@ -29,6 +34,7 @@ class Provincia:
 
 @dataclass
 class Ejercito:
+    """Unidad móvil de tropas"""
     id_ejercito: int
     id_propietario: int
     cantidad_fuerza: float
@@ -40,6 +46,7 @@ class Ejercito:
 
 @dataclass
 class Jugador:
+    """Clase que representa al jugador"""
     id_jugador: int
     oro_tesoro: float
     puntos_accion: float
@@ -54,6 +61,7 @@ class Jugador:
 
 @dataclass
 class Partida:
+    """Estado global de la simulación"""
     objetivo_victoria: ObjetivoVictoria
     turno_limite: int
     jugadores: dict
@@ -65,12 +73,14 @@ class Partida:
     ganador: int = None
 
     def eliminar_jugador(self, id_jugador: int) -> None:
+        """Marca jugador como derrotado y evalúa condición de victoria"""
         if id_jugador in self.jugadores_activos:
             self.jugadores_activos.remove(id_jugador)
         self.jugadores[id_jugador].rey_vivo = False
         self.evaluar_condicion_victoria()
 
     def evaluar_condicion_victoria(self) -> None:
+        """Verifica si la partida ha terminado (aniquilación o límite de turnos)"""
         if len(self.jugadores_activos) <= 1:
             self.finalizada = True
             self.ganador = self.jugadores_activos[0] if self.jugadores_activos else None

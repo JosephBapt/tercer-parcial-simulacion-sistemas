@@ -1,3 +1,5 @@
+"""Carga de escenarios y parámetros desde archivos JSON"""
+
 import json
 from dataclasses import dataclass
 
@@ -6,6 +8,7 @@ from .models import Partida, Jugador, Provincia, Ejercito, TipoControl, Objetivo
 
 @dataclass
 class Parametros:
+    """Parámetros de simulación: coeficientes económicos, militares y de mecánica de juego"""
     c_m: float
     m_min: float
     b_fort: float
@@ -37,12 +40,14 @@ class Parametros:
 
 
 def cargar_parametros(path: str) -> Parametros:
+    """Carga parámetros de simulación desde archivo JSON"""
     with open(path, encoding="utf-8") as f:
         datos = json.load(f)
     return Parametros(**datos)
 
 
 def cargar_escenario(path: str) -> Partida:
+    """Carga estado inicial de partida desde archivo JSON"""
     with open(path, encoding="utf-8") as f:
         datos = json.load(f)
 
