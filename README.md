@@ -13,16 +13,14 @@ Motor de simulación de eventos discretos (back-end) del caso de estudio Age of 
     pytest tests/ -v
 
 ## Extra: ejecutar con uv (sin instalar nada globalmente)
-Si tienes [uv](https://docs.astral.sh/uv/) instalado, no hace falta crear un venv ni instalar pytest a mano:
+Si tienes [uv](https://docs.astral.sh/uv/) instalado, no hace falta crear un venv ni instalar pytest a mano (el proyecto ya trae `pyproject.toml`/`uv.lock`):
 
-    uv run --with pytest python3 main.py --seed 42
-    uv run --with pytest pytest tests/ -v
+    uv run python3 main.py --seed 42
+    uv run pytest tests/ -v
 
-## Estructura
-- `aoc_sim/models.py` — entidades del Modelo Conceptual (Partida, Jugador, Provincia, Ejercito).
-- `aoc_sim/events.py` — cola de eventos (`EventQueue`) y tipos de evento.
-- `aoc_sim/engine.py` — fórmulas del modelo matemático y motor DES (dispatch table).
-- `aoc_sim/ai.py` — árbol de decisión de la IA.
-- `aoc_sim/scenario.py` — carga y validación de `data/scenario.json` y `data/params.json`.
-- `aoc_sim/cli.py` — menú de órdenes del jugador humano.
-- `data/` — escenario inicial y parámetros del modelo (editables sin tocar código).
+## Escenarios
+Además de `data/scenario.json` (por defecto), hay 3 escenarios listos para distinta dificultad:
+
+    uv run python3 main.py --scenario data/scenario_facil.json --params data/params.json --seed 42
+    uv run python3 main.py --scenario data/scenario_medio.json --params data/params.json --seed 42
+    uv run python3 main.py --scenario data/scenario_dificil.json --params data/params.json --seed 42
