@@ -2,9 +2,9 @@
   "objetivo_victoria": "ANIQUILACION",
   "turno_limite": 50,
   "jugadores": [
-    {"id_jugador": 1, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 20.0, "tipo_control": "HUMANO", "puesto_clasificacion": 1},
-    {"id_jugador": 2, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 20.0, "tipo_control": "IA", "puesto_clasificacion": 2},
-    {"id_jugador": 3, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 20.0, "tipo_control": "IA", "puesto_clasificacion": 3}
+    {"id_jugador": 1, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 2.0, "tipo_control": "HUMANO", "puesto_clasificacion": 1},
+    {"id_jugador": 2, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 2.0, "tipo_control": "IA", "puesto_clasificacion": 2},
+    {"id_jugador": 3, "oro_tesoro": 500.0, "puntos_accion": 10.0, "nivel_impuesto": 2.0, "tipo_control": "IA", "puesto_clasificacion": 3}
   ],
   "provincias": [
     {"id_provincia": 1, "id_propietario": 1, "poblacion_base": 5000, "nivel_felicidad": 80, "nivel_infraestructura": 1, "tropas_guarnicion": 150, "nodos_vecinos": [2, 3], "fortificada": false, "tiene_rey": true},

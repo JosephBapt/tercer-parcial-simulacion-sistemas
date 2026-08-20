@@ -21,10 +21,10 @@
   "gamma": 0.05,
   "margen_ia": 1.2,
   "puntos_accion_max": 10.0,
-  "costo_reclutamiento_por_tropa": 2.0,
-  "costo_fortificacion": 100.0,
-  "costo_decreto": 50.0,
+  "costo_reclutamiento_por_tropa": 150.0,
+  "costo_fortificacion": 25000.0,
+  "costo_decreto": 8000.0,
   "delta_decreto_felicidad": 10.0,
-  "costo_infraestructura": 200.0,
+  "costo_infraestructura": 45000.0,
   "comercio_por_poblacion": 0.3
 }

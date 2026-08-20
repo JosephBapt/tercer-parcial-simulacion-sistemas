@@ -10,7 +10,7 @@ PARAMS = SimpleNamespace(
 
 
 def _partida_dos_jugadores():
-    p1 = Provincia(id_provincia=1, id_propietario=1, poblacion_base=1000, nivel_felicidad=80,
+    p1 = Provincia(id_provincia=1, id_propietario=1, poblacion_base=10000, nivel_felicidad=80,
                     nivel_infraestructura=1, tropas_guarnicion=100, nodos_vecinos=[2], tiene_rey=True)
     p2 = Provincia(id_provincia=2, id_propietario=2, poblacion_base=1000, nivel_felicidad=80,
                     nivel_infraestructura=1, tropas_guarnicion=20, nodos_vecinos=[1])
@@ -38,6 +38,16 @@ def test_orden_reclutar_descuenta_oro_y_suma_tropas():
     aplicar_orden(partida, PARAMS, j1, {"tipo": "RECLUTAR", "id_provincia": 1, "cantidad": 20}, None, log=lambda m: None)
     assert j1.oro_tesoro == 460.0
     assert partida.provincias[1].tropas_guarnicion == 120
+    assert partida.provincias[1].poblacion_base == 8000  # 10000 - 20*100
+
+
+def test_orden_reclutar_sin_poblacion_suficiente_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    partida.provincias[1].poblacion_base = 500  # alcanza para 5 tropas, no para 20
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "RECLUTAR", "id_provincia": 1, "cantidad": 20}, None, log=lambda m: None)
+    assert j1.oro_tesoro == 500.0
+    assert partida.provincias[1].tropas_guarnicion == 100
+    assert partida.provincias[1].poblacion_base == 500
 
 
 def test_orden_reclutar_cantidad_negativa_no_hace_nada():
@@ -85,6 +95,42 @@ def test_orden_mover_a_provincia_enemiga_resuelve_combate_y_transfiere():
     assert 2 in j1.provincias_controladas
     assert 2 not in partida.jugadores[2].provincias_controladas
     assert 1 not in partida.ejercitos  # se absorbe como guarnicion, no queda como unidad movil
+
+
+def test_orden_mover_cantidad_parcial_refuerza_y_deja_remanente_en_origen():
+    partida, j1 = _partida_dos_jugadores()
+    partida.provincias[2].id_propietario = 1
+    j1.provincias_controladas.append(2)
+    aplicar_orden(partida, PARAMS, j1,
+                   {"tipo": "MOVER", "id_ejercito": 1, "provincia_destino": 2, "cantidad": 25},
+                   None, log=lambda m: None)
+    assert partida.provincias[2].tropas_guarnicion == 45  # 20+25
+    assert 1 in partida.ejercitos  # el ejercito original sigue existiendo con el resto
+    assert partida.ejercitos[1].cantidad_fuerza == 35  # 60-25
+    assert partida.ejercitos[1].nodo_posicion_id == 1
+
+
+def test_orden_mover_cantidad_parcial_ataca_con_solo_esa_fuerza():
+    partida, j1 = _partida_dos_jugadores()
+    aplicar_orden(partida, PARAMS, j1,
+                   {"tipo": "MOVER", "id_ejercito": 1, "provincia_destino": 2, "cantidad": 25},
+                   None, log=lambda m: None)
+    # Fa=25 < Fd=20*1(sin bono) -> en realidad Fa=25 > Fd=20, gana atacante igual con solo 25 de fuerza
+    assert partida.provincias[2].id_propietario == 1
+    assert 1 in partida.ejercitos  # el ejercito original conserva el resto en P1
+    assert partida.ejercitos[1].cantidad_fuerza == 35  # 60-25
+    assert partida.ejercitos[1].nodo_posicion_id == 1
+
+
+def test_orden_mover_cantidad_mayor_o_igual_a_la_fuerza_mueve_todo():
+    partida, j1 = _partida_dos_jugadores()
+    partida.provincias[2].id_propietario = 1
+    j1.provincias_controladas.append(2)
+    aplicar_orden(partida, PARAMS, j1,
+                   {"tipo": "MOVER", "id_ejercito": 1, "provincia_destino": 2, "cantidad": 999},
+                   None, log=lambda m: None)
+    assert partida.provincias[2].tropas_guarnicion == 80  # 20+60, se movio todo
+    assert 1 not in partida.ejercitos
 
 
 def test_orden_mover_a_no_vecino_no_hace_nada():
@@ -136,6 +182,37 @@ def test_orden_guerra_marca_relacion_bidireccional():
     aplicar_orden(partida, PARAMS, j1, {"tipo": "GUERRA", "id_objetivo": 2}, None, log=lambda m: None)
     assert j1.relaciones_diplomaticas[2] == "GUERRA"
     assert partida.jugadores[2].relaciones_diplomaticas[1] == "GUERRA"
+
+
+def test_orden_guerra_aplica_golpe_inmediato_de_felicidad():
+    partida, j1 = _partida_dos_jugadores()
+    partida.provincias[1].nivel_felicidad = 80.0
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "GUERRA", "id_objetivo": 2}, None, log=lambda m: None)
+    assert partida.provincias[1].nivel_felicidad == 64.0  # 80 - 16
+
+
+def test_orden_guerra_golpe_de_felicidad_no_baja_de_cero():
+    partida, j1 = _partida_dos_jugadores()
+    partida.provincias[1].nivel_felicidad = 10.0
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "GUERRA", "id_objetivo": 2}, None, log=lambda m: None)
+    assert partida.provincias[1].nivel_felicidad == 0.0
+
+
+def test_orden_consume_puntos_de_accion():
+    partida, j1 = _partida_dos_jugadores()
+    j1.puntos_accion = 10.0
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "FORTIFICAR", "id_provincia": 1}, None, log=lambda m: None)
+    assert j1.puntos_accion == 9.5  # 10 - 0.5
+    assert partida.provincias[1].fortificada is True
+
+
+def test_orden_sin_puntos_de_accion_suficientes_se_descarta():
+    partida, j1 = _partida_dos_jugadores()
+    j1.puntos_accion = 0.0
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "FORTIFICAR", "id_provincia": 1}, None, log=lambda m: None)
+    assert j1.puntos_accion == 0.0
+    assert partida.provincias[1].fortificada is False
+    assert j1.oro_tesoro == 500.0  # tampoco se cobro el oro
 
 
 def test_orden_guerra_id_objetivo_inexistente_no_crashea():
@@ -219,6 +296,15 @@ def test_orden_reforzar_ejercito_cantidad_negativa_no_hace_nada():
                   None, log=lambda m: None)
     assert partida.ejercitos[1].cantidad_fuerza == 60
     assert partida.provincias[1].tropas_guarnicion == 100
+
+
+def test_orden_reforzar_ejercito_en_provincia_ajena_no_hace_nada():
+    partida, j1 = _partida_dos_jugadores()
+    partida.ejercitos[1].nodo_posicion_id = 2  # quedo parado en territorio de J2
+    aplicar_orden(partida, PARAMS, j1, {"tipo": "REFORZAR_EJERCITO", "id_ejercito": 1, "cantidad": 5},
+                  None, log=lambda m: None)
+    assert partida.ejercitos[1].cantidad_fuerza == 60
+    assert partida.provincias[2].tropas_guarnicion == 20
 
 
 def test_orden_reforzar_ejercito_ajeno_no_hace_nada():

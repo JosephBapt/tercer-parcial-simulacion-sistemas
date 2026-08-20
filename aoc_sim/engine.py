@@ -1,12 +1,16 @@
-"""Motor de simulacion: formulas del modelo matematico y despachador de eventos DES."""
+"""Motor de simulacion formulas del modelo matematico y despachador de eventos"""
 
 import math
 
 from .events import EventQueue, TipoEvento
 from .models import SIN_DUENO, Ejercito
 
+# Extension fuera del enunciado: cada tropa reclutada consume poblacion base.
+COSTO_POBLACION_POR_RECLUTA = 100
+
 
 def calcular_fuerza_ataque(atacante, params):
+    """Calcula fuerza de combate del atacante"""
     fuerza = atacante.cantidad_fuerza
     if atacante.contiene_rey:
         fuerza *= (1 + params.b_rey_atk)
@@ -16,6 +20,7 @@ def calcular_fuerza_ataque(atacante, params):
 
 
 def calcular_fuerza_defensa(defensor, params):
+    """Calcula fuerza de defensa de la provincia"""
     fuerza = defensor.tropas_guarnicion
     if defensor.fortificada:
         fuerza *= (1 + params.b_fort)
@@ -25,6 +30,7 @@ def calcular_fuerza_defensa(defensor, params):
 
 
 def resolver_combate(atacante, defensor, params):
+    """Resuelve un combate entre ejercito y provincia"""
     fuerza_ataque = calcular_fuerza_ataque(atacante, params)
     fuerza_defensa = calcular_fuerza_defensa(defensor, params)
     id_propietario_anterior = defensor.id_propietario
@@ -74,6 +80,26 @@ def calcular_mantenimiento(provincias_jugador, params):
         if p.tropas_guarnicion > 0:
             total += max(params.m_min, params.c_m * p.tropas_guarnicion)
     return total
+
+
+def calcular_desercion(partida, jugador, params, log, tiempo):
+    for ejercito in list(partida.ejercitos.values()):
+        if ejercito.id_propietario != jugador.id_jugador:
+            continue
+        provincia = partida.provincias[ejercito.nodo_posicion_id]
+        ejercito.en_territorio_no_aliado = provincia.id_propietario != jugador.id_jugador
+        if not ejercito.en_territorio_no_aliado:
+            continue
+        fuerza_anterior = ejercito.cantidad_fuerza
+        ejercito.cantidad_fuerza *= (1 - params.p_terr)
+        if ejercito.cantidad_fuerza < 1:
+            del partida.ejercitos[ejercito.id_ejercito]
+            log(f"t={tiempo:.3f} EV_DESERCION E{ejercito.id_ejercito} J{jugador.id_jugador} "
+                f"se disuelve en P{provincia.id_provincia} (territorio no aliado)")
+        else:
+            log(f"t={tiempo:.3f} EV_DESERCION E{ejercito.id_ejercito} J{jugador.id_jugador} "
+                f"pierde tropas en P{provincia.id_provincia} (territorio no aliado): "
+                f"{fuerza_anterior:.1f} -> {ejercito.cantidad_fuerza:.1f}")
 
 
 def aplicar_mantenimiento(jugador, provincias_jugador, params):
@@ -162,14 +188,30 @@ def _aplicar_movimiento(partida, params, jugador, orden, log):
         log(f"Movimiento invalido: P{destino_id} no es vecino de P{origen.id_provincia}")
         return
 
+    cantidad = orden.get("cantidad")
+    mover_todo = cantidad is None or cantidad >= ejercito.cantidad_fuerza
+    if mover_todo:
+        fuerza_movil = ejercito
+    else:
+        if cantidad <= 0:
+            log(f"J{jugador.id_jugador}: cantidad invalida para mover desde E{ejercito.id_ejercito}")
+            return
+        ejercito.cantidad_fuerza -= cantidad
+        fuerza_movil = Ejercito(
+            id_ejercito=ejercito.id_ejercito, id_propietario=jugador.id_jugador,
+            cantidad_fuerza=cantidad, nodo_posicion_id=ejercito.nodo_posicion_id,
+            desde_barco=ejercito.desde_barco,
+        )
+
     destino = partida.provincias[destino_id]
     if destino.id_propietario == jugador.id_jugador:
-        destino.tropas_guarnicion += ejercito.cantidad_fuerza
-        log(f"J{jugador.id_jugador} refuerza P{destino_id} con {ejercito.cantidad_fuerza} tropas")
-        del partida.ejercitos[ejercito.id_ejercito]
+        destino.tropas_guarnicion += fuerza_movil.cantidad_fuerza
+        log(f"J{jugador.id_jugador} refuerza P{destino_id} con {fuerza_movil.cantidad_fuerza} tropas")
+        if mover_todo:
+            del partida.ejercitos[ejercito.id_ejercito]
         return
 
-    resultado = resolver_combate(ejercito, destino, params)
+    resultado = resolver_combate(fuerza_movil, destino, params)
     log(f"EV_RESOLVER_ATAQUE E{ejercito.id_ejercito} vs P{destino_id}: "
         f"Fa={resultado['fuerza_ataque']:.1f} Fd={resultado['fuerza_defensa']:.1f} "
         f"gana={'atacante' if resultado['gano_atacante'] else 'defensor'}")
@@ -185,10 +227,12 @@ def _aplicar_movimiento(partida, params, jugador, orden, log):
         if resultado["rey_derrotado_de"] is not None:
             evaluar_muerte_de_rey(partida, resultado["rey_derrotado_de"], log)
 
-    # El ejercito se disuelve al llegar (gana -> se convierte en la guarnicion ya
+    # El ejercito movil se disuelve al llegar (gana -> se convierte en la guarnicion ya
     # actualizada por resolver_combate; pierde -> queda destruido). Nunca sigue
-    # existiendo como unidad movil separada tras resolver un MOVER.
-    del partida.ejercitos[ejercito.id_ejercito]
+    # existiendo como unidad movil separada tras resolver un MOVER. Si solo se movio
+    # una parte de la fuerza, el ejercito original permanece en origen con el resto.
+    if mover_todo:
+        del partida.ejercitos[ejercito.id_ejercito]
 
 
 def _provincia_propia(partida, jugador, id_provincia, log):
@@ -202,8 +246,43 @@ def _provincia_propia(partida, jugador, id_provincia, log):
     return provincia
 
 
+# Extension fuera del enunciado: costo en puntos de accion por tipo de orden.
+# El Segundo Parcial menciona calcularPuntosAccion(jugador) en el pseudocodigo pero
+# no da una formula de costo por orden; los valores marcados con [AoC] se tomaron de
+# observacion directa del juego real (Age of Conquest), el resto son estimaciones
+# consistentes con esa escala para las ordenes que el juego real no tiene.
+COSTO_AP_POR_ORDEN = {
+    "IMPUESTO": 0.1,
+    "RECLUTAR": 1.0,       # [AoC]
+    "FORTIFICAR": 0.5,     # [AoC]
+    "INVERTIR_INFRAESTRUCTURA": 0.5,
+    "DECRETO_FELICIDAD": 0.2,  # [AoC] (analogo a "distribuir dinero")
+    "ABANDONAR": 0.1,
+    "DESMANTELAR": 0.1,
+    "GUERRA": 1.0,         # [AoC]
+    "REFORZAR_EJERCITO": 0.5,
+    "CREAR_EJERCITO": 0.5,
+    "DIVIDIR_EJERCITO": 0.5,
+    "MOVER": 1.0,
+    "PASAR": 0.0,
+}
+
+# Extension fuera del enunciado: golpe inmediato de felicidad al declarar guerra,
+# observado en Age of Conquest real (ademas de la penalizacion continua p_guerra
+# que si esta en la formula del Segundo Parcial).
+PENALIZACION_FELICIDAD_DECLARAR_GUERRA = 16
+
+
 def aplicar_orden(partida, params, jugador, orden, rng, log):
+    """Ejecuta una orden del jugador"""
     tipo = orden["tipo"]
+
+    costo_ap = COSTO_AP_POR_ORDEN.get(tipo, 0.0)
+    if jugador.puntos_accion < costo_ap:
+        log(f"J{jugador.id_jugador}: puntos de accion insuficientes para {tipo} "
+            f"(necesita {costo_ap}, tiene {jugador.puntos_accion:.1f}). Orden descartada.")
+        return
+    jugador.puntos_accion -= costo_ap
 
     if tipo == "IMPUESTO":
         jugador.nivel_impuesto = max(0.0, orden["nuevo_nivel"])
@@ -212,11 +291,21 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
     elif tipo == "RECLUTAR":
         provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
         if provincia is not None:
-            costo = orden["cantidad"] * params.costo_reclutamiento_por_tropa
-            if orden["cantidad"] > 0 and jugador.oro_tesoro >= costo:
+            cantidad = orden["cantidad"]
+            costo = cantidad * params.costo_reclutamiento_por_tropa
+            costo_poblacion = cantidad * COSTO_POBLACION_POR_RECLUTA
+            if cantidad > 0 and jugador.oro_tesoro < costo:
+                log(f"J{jugador.id_jugador}: oro insuficiente para reclutar en P{provincia.id_provincia}. "
+                    f"Orden descartada.")
+            elif cantidad > 0 and provincia.poblacion_base < costo_poblacion:
+                log(f"J{jugador.id_jugador}: poblacion insuficiente en P{provincia.id_provincia} "
+                    f"para reclutar {cantidad} tropas. Orden descartada.")
+            elif cantidad > 0:
                 jugador.oro_tesoro -= costo
-                provincia.tropas_guarnicion += orden["cantidad"]
-                log(f"J{jugador.id_jugador} recluta {orden['cantidad']} tropas en P{provincia.id_provincia}")
+                provincia.poblacion_base -= costo_poblacion
+                provincia.tropas_guarnicion += cantidad
+                log(f"J{jugador.id_jugador} recluta {cantidad} tropas en P{provincia.id_provincia} "
+                    f"(-{costo_poblacion:.0f} poblacion)")
 
     elif tipo == "FORTIFICAR":
         provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
@@ -265,7 +354,11 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
         else:
             jugador.relaciones_diplomaticas[id_objetivo] = "GUERRA"
             partida.jugadores[id_objetivo].relaciones_diplomaticas[jugador.id_jugador] = "GUERRA"
-            log(f"J{jugador.id_jugador} declara guerra a J{id_objetivo}")
+            for id_prov in jugador.provincias_controladas:
+                p = partida.provincias[id_prov]
+                p.nivel_felicidad = max(0.0, p.nivel_felicidad - PENALIZACION_FELICIDAD_DECLARAR_GUERRA)
+            log(f"J{jugador.id_jugador} declara guerra a J{id_objetivo} "
+                f"(-{PENALIZACION_FELICIDAD_DECLARAR_GUERRA:.0f}% felicidad)")
 
     elif tipo == "REFORZAR_EJERCITO":
         ejercito = partida.ejercitos.get(orden["id_ejercito"])
@@ -274,12 +367,33 @@ def aplicar_orden(partida, params, jugador, orden, rng, log):
         elif orden["cantidad"] > 0:
             provincia = partida.provincias[ejercito.nodo_posicion_id]
             cantidad = orden["cantidad"]
-            if provincia.tropas_guarnicion >= cantidad:
+            if provincia.id_propietario != jugador.id_jugador:
+                log(f"J{jugador.id_jugador}: E{ejercito.id_ejercito} esta en P{provincia.id_provincia}, "
+                    f"que no es tuya. Orden descartada.")
+            elif provincia.tropas_guarnicion >= cantidad:
                 provincia.tropas_guarnicion -= cantidad
                 ejercito.cantidad_fuerza += cantidad
                 log(f"J{jugador.id_jugador} fusiona {cantidad} tropas de la guarnicion de "
                     f"P{provincia.id_provincia} al ejercito E{ejercito.id_ejercito} "
                     f"(fuerza={ejercito.cantidad_fuerza})")
+
+    elif tipo == "CREAR_EJERCITO":
+        provincia = _provincia_propia(partida, jugador, orden["id_provincia"], log)
+        if provincia is not None:
+            cantidad = orden["cantidad"]
+            if cantidad > 0 and provincia.tropas_guarnicion >= cantidad:
+                provincia.tropas_guarnicion -= cantidad
+                nuevo_id = max(partida.ejercitos.keys(), default=0) + 1
+                nuevo_ejercito = Ejercito(
+                    id_ejercito=nuevo_id, id_propietario=jugador.id_jugador,
+                    cantidad_fuerza=cantidad, nodo_posicion_id=provincia.id_provincia,
+                )
+                partida.ejercitos[nuevo_id] = nuevo_ejercito
+                log(f"J{jugador.id_jugador} crea E{nuevo_id} con {cantidad} tropas desde "
+                    f"la guarnicion de P{provincia.id_provincia}")
+            else:
+                log(f"J{jugador.id_jugador}: cantidad invalida para crear ejercito en "
+                    f"P{provincia.id_provincia} (guarnicion={provincia.tropas_guarnicion})")
 
     elif tipo == "DIVIDIR_EJERCITO":
         ejercito = partida.ejercitos.get(orden["id_ejercito"])
@@ -405,7 +519,9 @@ def _h_evaluar_victoria(partida, params, evento, rng, log, contexto):
 
 
 def _h_fin_turno(partida, params, evento, rng, log, contexto):
-    log(f"t={evento.tiempo:.3f} EV_FIN_TURNO J{evento.entidades['id_jugador']}")
+    jugador = partida.jugadores[evento.entidades["id_jugador"]]
+    calcular_desercion(partida, jugador, params, log, evento.tiempo)
+    log(f"t={evento.tiempo:.3f} EV_FIN_TURNO J{jugador.id_jugador}")
     contexto["turnos_completados"] += 1
     return []
 
@@ -425,6 +541,7 @@ _DESPACHO = {
 
 
 def ejecutar_partida(partida, params, rng, obtener_ordenes, log, turnos_minimos=5, continuar_callback=None):
+    """Ejecuta el ciclo de simulación completo, procesa eventos hasta victoria o límite de turnos"""
     cola = EventQueue()
     contexto = {
         "obtener_ordenes": obtener_ordenes,
